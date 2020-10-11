@@ -22,7 +22,6 @@ class Token:
 
 
 separators = ['{', '}', '(', ')', ';', ',']
-single_char_operators = ['!', '~', '+', '-', '*', '/', '>', '<', '^', '%', '&', '|', '=', '?', ':', '.']
 operators = {'!': {'!', '!='}, '~': {'~'}, '+': {'+', '++', '+='}, '-': {'-', '--', '-=', '->', '->*'},
              '*': {'*', '*='}, '/': {'/', '/='}, '>': {'>', '>>, >=', '>>='}, '<': {'<', '<<', '<=', '<<=', '<=>'},
              '^': {'^', '^='}, '%': {'%', '%='}, '&': {'&', '&=', '&&'}, '|': {'|', '|=', '||'}, '=': {'=', '=='},
@@ -37,3 +36,62 @@ keywords = ["alignas", "alignof", "and", "and_eq", "asm", "atomic_cancel", "atom
             "sizeof", "static", "static_assert", "static_cast", "struct", "switch", "synchronized", "template", "this",
             "thread_local", "throw", "true", "try", "typedef", "typeid", "typename", "union", "unsigned", "using",
             "virtual", "void", "volatile", "wchar_t", "while", "xor", "xor_eq"]
+
+
+def is_possible(char):
+    return char.islower() or char.isupper() or char.isdigit() or char == '_'
+
+
+def lex(code):
+    token_list = []
+    line = 1
+    line_start = -1
+    if code[-1] != '\n':
+        code = code + '\n'
+    i = 0
+    while i < len(code) - 1:
+        char = code[i]
+        if char.isspace():
+            if char == '\n':
+                line += 1
+                line_start = i
+        elif char in separators:
+            token_list.append(Token(char, "separator", line, i - line_start))
+        elif char in operators.keys():
+            possible_operators = operators[char]
+            operator = None
+            for possible_operator in possible_operators:
+                if i + len(possible_operator) < len(code):
+                    if (operator is None or len(operator) < len(possible_operator))\
+                            and possible_operator == code[i:i+len(possible_operator)]:
+                        operator = possible_operator
+            if operator is not None:
+                i += len(operator) - 1
+                token_list.append(Token(operator, "operator", line, i))
+
+        else:
+            if is_possible(char):
+                identifier = char
+                j = i + 1
+                while j < len(code) - 1 and (is_possible(code[j])):
+                    identifier += code[j]
+                    j += 1
+                if identifier in keywords:
+                    # add as keyword
+                    token_list.append(Token(identifier, "keyword", line, i - line_start))
+                else:
+                    if identifier.isnumeric():
+                        if j + 1 < len(code):
+                            if code[j] == '.' and code[j + 1].isnumeric():
+                                identifier += '.'
+                                j += 1
+                                while j < len(code) and code[j].isnumeric():
+                                    identifier += code[j]
+                                    j += 1
+                        token_list.append(Token(identifier, "numeric", line, i - line_start))
+                    else:
+                        token_list.append(Token(identifier, "identifier", line, i - line_start))
+                i = j - 1
+        i += 1
+
+    return token_list
