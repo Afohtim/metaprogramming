@@ -50,27 +50,49 @@ def lex(code):
         code = code + '\n'
     i = 0
     while i < len(code) - 1:
-        char = code[i]
-        if char.isspace():
-            if char == '\n':
-                line += 1
-                line_start = i
-        elif char in separators:
-            token_list.append(Token(char, "separator", line, i - line_start))
-        elif char in operators.keys():
-            possible_operators = operators[char]
-            operator = None
-            for possible_operator in possible_operators:
-                if i + len(possible_operator) < len(code):
-                    if (operator is None or len(operator) < len(possible_operator))\
-                            and possible_operator == code[i:i+len(possible_operator)]:
-                        operator = possible_operator
-            if operator is not None:
-                i += len(operator) - 1
-                token_list.append(Token(operator, "operator", line, i))
-
-        else:
-            if is_possible(char):
+        try:
+            char = code[i]
+            if char.isspace():
+                if char == '\n':
+                    line += 1
+                    line_start = i
+            elif char in separators:
+                token_list.append(Token(char, "separator", line, i - line_start))
+            elif char in operators.keys():
+                possible_operators = operators[char]
+                operator = None
+                for possible_operator in possible_operators:
+                    if i + len(possible_operator) < len(code):
+                        if (operator is None or len(operator) < len(possible_operator))\
+                                and possible_operator == code[i:i+len(possible_operator)]:
+                            operator = possible_operator
+                if operator is not None:
+                    i += len(operator) - 1
+                    token_list.append(Token(operator, "operator", line, i))
+            elif char == "'":
+                char_literal = "'"
+                j = i
+                if code[j+1] == '\\':
+                    char_literal += '\\'
+                    j += 1
+                char_literal += code[i+1]
+                if code[j+1] != "'":
+                    if code[j+2] == "'":
+                        char_literal += "'"
+                    else:
+                        raise Exception('char literal has more than 1 character')
+                token_list.append(Token(char_literal, "char", line, i - line_start))
+                i = j + 2
+            elif char == '"':
+                j = i + 1
+                string_literal = '"'
+                while code[j] != '"':
+                    string_literal += code[j]
+                    j += 1
+                string_literal += '"'
+                token_list.append(Token(string_literal, "string", line, i - line_start))
+                i = j
+            elif is_possible(char):
                 identifier = char
                 j = i + 1
                 while j < len(code) - 1 and (is_possible(code[j])):
@@ -82,16 +104,20 @@ def lex(code):
                 else:
                     if identifier.isnumeric():
                         if j + 1 < len(code):
-                            if code[j] == '.' and code[j + 1].isnumeric():
+                            if code[j] == '.' and code[j + 1].isdigit():
                                 identifier += '.'
                                 j += 1
-                                while j < len(code) and code[j].isnumeric():
+                                while j < len(code) and code[j].isdigit():
                                     identifier += code[j]
                                     j += 1
                         token_list.append(Token(identifier, "numeric", line, i - line_start))
                     else:
                         token_list.append(Token(identifier, "identifier", line, i - line_start))
                 i = j - 1
-        i += 1
+            i += 1
+        except Exception as e:
+            print(e)
+            break
+
 
     return token_list

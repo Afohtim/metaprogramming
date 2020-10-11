@@ -2,7 +2,7 @@ import sys, os, re
 import lexer
 
 
-source_file = "{project_path}/code.cpp"
+source_file = "{project_path}/main.cpp"
 assembly_file = os.path.splitext(source_file)[0] + ".s"
 
 
