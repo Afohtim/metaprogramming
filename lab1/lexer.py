@@ -118,6 +118,4 @@ def lex(code):
         except Exception as e:
             print(e)
             break
-
-
     return token_list
