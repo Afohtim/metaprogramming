@@ -33,6 +33,7 @@
       "Equality": true,
       "Relational": true,
       "Bitwise": true,
+      "Additive": true,
       "Multiplicative": true,
       "Shift": true,
       "Unary": false,

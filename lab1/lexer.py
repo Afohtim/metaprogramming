@@ -1,5 +1,19 @@
+import enum
+
+
+class TokenType(enum.Enum):
+    whitespace = 0
+    separator = 1
+    operator = 2
+    keyword = 3
+    identifier = 4
+    char = 5
+    string = 6
+    numeric = 7
+
+
 class Token:
-    def __init__(self, token_string, token_type, line, symbol_pos):
+    def __init__(self, token_string, token_type, line=None, symbol_pos=None):
         self.__token_string = token_string
         self.__token_type = token_type
         self.__line = line
@@ -12,13 +26,22 @@ class Token:
         return self.__token_string
 
     def is_identifier(self):
-        return self.__token_type == "identifier"
+        return self.__token_type == TokenType.identifier
+
+    def is_whitespace(self):
+        return self.__token_type == TokenType.whitespace
+
+    def is_operator(self):
+        return self.__token_type == TokenType.operator
 
     def line(self):
         return self.__line
 
     def char(self):
         return self.__symbol_pos
+
+    def get_type(self):
+        return self.__token_type
 
 
 separators = ['{', '}', '(', ')', ';', ',']
@@ -53,11 +76,12 @@ def lex(code):
         try:
             char = code[i]
             if char.isspace():
+                token_list.append(Token(char, TokenType.whitespace, line, i - line_start))
                 if char == '\n':
                     line += 1
                     line_start = i
             elif char in separators:
-                token_list.append(Token(char, "separator", line, i - line_start))
+                token_list.append(Token(char, TokenType.separator, line, i - line_start))
             elif char in operators.keys():
                 possible_operators = operators[char]
                 operator = None
@@ -68,7 +92,7 @@ def lex(code):
                             operator = possible_operator
                 if operator is not None:
                     i += len(operator) - 1
-                    token_list.append(Token(operator, "operator", line, i))
+                    token_list.append(Token(operator, TokenType.operator, line, i))
             elif char == "'":
                 char_literal = "'"
                 j = i
@@ -81,7 +105,7 @@ def lex(code):
                         char_literal += "'"
                     else:
                         raise Exception('char literal has more than 1 character')
-                token_list.append(Token(char_literal, "char", line, i - line_start))
+                token_list.append(Token(char_literal, TokenType.char, line, i - line_start))
                 i = j + 2
             elif char == '"':
                 j = i + 1
@@ -90,7 +114,7 @@ def lex(code):
                     string_literal += code[j]
                     j += 1
                 string_literal += '"'
-                token_list.append(Token(string_literal, "string", line, i - line_start))
+                token_list.append(Token(string_literal, TokenType.string, line, i - line_start))
                 i = j
             elif is_possible(char):
                 identifier = char
@@ -100,7 +124,7 @@ def lex(code):
                     j += 1
                 if identifier in keywords:
                     # add as keyword
-                    token_list.append(Token(identifier, "keyword", line, i - line_start))
+                    token_list.append(Token(identifier, TokenType.keyword, line, i - line_start))
                 else:
                     if identifier.isnumeric():
                         if j + 1 < len(code):
@@ -110,9 +134,9 @@ def lex(code):
                                 while j < len(code) and code[j].isdigit():
                                     identifier += code[j]
                                     j += 1
-                        token_list.append(Token(identifier, "numeric", line, i - line_start))
+                        token_list.append(Token(identifier, TokenType.numeric, line, i - line_start))
                     else:
-                        token_list.append(Token(identifier, "identifier", line, i - line_start))
+                        token_list.append(Token(identifier, TokenType.identifier, line, i - line_start))
                 i = j - 1
             i += 1
         except Exception as e:
