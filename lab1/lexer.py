@@ -60,6 +60,9 @@ keywords = ["alignas", "alignof", "and", "and_eq", "asm", "atomic_cancel", "atom
             "thread_local", "throw", "true", "try", "typedef", "typeid", "typename", "union", "unsigned", "using",
             "virtual", "void", "volatile", "wchar_t", "while", "xor", "xor_eq"]
 
+preprocessor_directives = ['#include', '#define', '#error', '#import', '#line', '#pragma', '#using', '#if', '#ifdef',
+                           '#ifndef', '#endif', '#elif', '#else', '#undef']
+
 
 def is_possible(char):
     return char.islower() or char.isupper() or char.isdigit() or char == '_'
