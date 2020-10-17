@@ -37,11 +37,15 @@ class Token:
     def line(self):
         return self.__line
 
-    def char(self):
+    def column(self):
         return self.__symbol_pos
 
     def get_type(self):
         return self.__token_type
+
+    def is_type(self):
+        return self.__token_string in ["auto", "bool", "char", "char8_t", "char16_t", "char32_t", "double", "float",
+                                       "int", "long" "void"]
 
 
 separators = ['{', '}', '(', ')', ';', ',']

@@ -4,7 +4,7 @@ import json
 
 
 class Formatter:
-    def __init__(self, tokens, config):
+    def __init__(self, tokens, config_file='config.json'):
         self.i = 0
         self.whitespace_stack = []
         self.formatted_tokens = []
@@ -12,11 +12,11 @@ class Formatter:
         self.errors = []
         self.scope_stack = ["program"]
         self.tokens = tokens
-        self.config = config
+        self.config = self.load_json(config_file)
 
     @staticmethod
-    def load_json():
-        with open('config.json') as config:
+    def load_json(config_file):
+        with open(config_file) as config:
             json_data = json.load(config)
             return json_data
 
@@ -53,7 +53,6 @@ class Formatter:
                current_statement_string == "switch" and self.config["Spaces"]["Before Parentheses"]["switch"] or \
                current_statement_string == "catch" and self.config["Spaces"]["Before Parentheses"]["catch"]
 
-
     def space_around_operators(self, current_operator):
         # TODO
         # last 2x
@@ -69,10 +68,11 @@ class Formatter:
                or current_operator in [] and self.config["Spaces"]["Around operators"]["-> in return type"] \
                or current_operator in ['->', '.', '->*', '.*'] and self.config["Spaces"]["Around operators"]["Pointer-to-member"] \
 
+
     def space_within(self, current_statement):
         return self.config["Spaces"]["Within"][current_statement]
 
-    def format_file(self, token_list):
+    def format_file_(self, token_list):
         config = self.load_json()
         previous_token = None
         formatted_token_list = []
@@ -104,13 +104,22 @@ class Formatter:
         return self.tokens[self.i]
 
     def assert_current_token_content(self, content):
-        if self.current_token().content() == content():
+        if self.current_token().content() == content:
             return True
         else:
             self.fail(
                 "expected \"{str}\" but got \"{token}\" at {line}:{char}"
-                    .format(str=content,token=self.current_token().content(),line=self.current_token().line(),
-                            char=self.current_token().char()))
+                .format(str=content, token=self.current_token().content(), line=self.current_token().line(),
+                        char=self.current_token().column()))
+
+    def assert_current_token_type(self, type):
+        if self.current_token().type() == type:
+            return True
+        else:
+            self.fail(
+                "expected \"{str}\" but got \"{token}\" at {line}:{char}"
+                    .format(str=type, token=self.current_token().type(), line=self.current_token().line(),
+                            char=self.current_token().column()))
 
     def save_token(self):
         self.formatted_tokens.append(self.current_token())
@@ -127,9 +136,19 @@ class Formatter:
             self.i += 1
 
     def change_whitespaces_to_space(self):
-        self.whitespace_stack = [' ']
+        self.whitespace_stack = [Token(' ', TokenType.whitespace)]
         # TODO push to changes
         self.changes.append("space")
+
+    def change_whitespaces_to_none(self):
+        self.whitespace_stack = []
+        # TODO push to changes
+        self.changes.append("none")
+
+    def change_next_to_space(self):
+        self.skip_whitespaces()
+        if not self.is_one_space_on_stack():
+            self.format_to_one_space()
 
     def is_one_space_on_stack(self):
         return len(self.whitespace_stack) == 1 and self.whitespace_stack[0] == ' '
@@ -139,8 +158,53 @@ class Formatter:
             self.change_whitespaces_to_space()
         self.save_whitespaces()
 
+    def format_factor(self):
+        #self.skip_whitespaces()
+        if self.current_token().content() == '(':
+            self.save_token()
+            self.format_expression()
+            self.assert_current_token_content(')')
+            self.save_token()
+        elif self.current_token().content().isnumeric() or self.current_token().is_identifier():
+            self.save_token()
+        else:
+            self.errors.append("expected factor but got \"{}\" at Ln {}, Col {}"
+                               .format(self.current_token().content(),self.current_token().line(),
+                                       self.current_token().column()))
+
+    def format_unary_expression(self):
+        if self.current_token().content() in ['+', '-', '!', '~']:
+            # TODO
+            pass
+        self.format_factor()
+
+    def format_binary_operator(self):
+        self.format_unary_expression()
+        self.skip_whitespaces()
+        while self.current_token().is_operator():
+            if self.space_around_operators(self.current_token().content()):
+                self.format_to_one_space()
+                self.save_token()
+                self.skip_whitespaces()
+                self.format_to_one_space()
+            else:
+                # TODO
+                pass
+            self.format_unary_expression()
+
+    def format_conditional_expression(self):
+        self.format_binary_operator()
+
     def format_expression(self):
-        pass
+        if self.current_token().is_identifier():
+            pass
+        else:
+            self.format_conditional_expression()
+
+    def format_declaration(self):
+        # TODO
+        if self.current_token().is_type():
+            self.save_token()
 
     def format_if(self):
         self.format_if()
@@ -153,7 +217,7 @@ class Formatter:
             self.save_token()
         else:
             if not len(self.whitespace_stack) == 0:
-                self.whitespace_stack = []
+                self.change_whitespaces_to_none()
 
         self.skip_whitespaces()
         if self.space_within('if parentheses'):
@@ -170,7 +234,10 @@ class Formatter:
         # TODO add else
 
     def format_statement(self):
-        # TODO whitespaces
+        # TODO whitespaces formatting
+        self.skip_whitespaces()
+        self.save_whitespaces()
+
         if self.current_token().content() == 'if':
             self.format_if()
         elif self.current_token().content() == 'for':
@@ -183,5 +250,56 @@ class Formatter:
             self.format_switch()
         elif self.current_token().content() == 'try':
             self.format_try_catch()
+        elif self.current_token().is_type():
+            self.format_declaration()
+        else:
+            self.format_expression()
+            self.assert_current_token_content(';')
+            self.save_token()
 
         pass
+
+    def format_function(self):
+        if self.current_token().is_type():
+            self.save_token()
+            self.change_next_to_space()
+            self.assert_current_token_type(TokenType.identifier)
+            self.save_token()
+            self.skip_whitespaces()
+            self.assert_current_token_content('(')
+            if self.space_before_parentheses('Function declaration'):
+                self.format_to_one_space()
+            else:
+                if not len(self.whitespace_stack) == 0:
+                    self.change_whitespaces_to_none()
+            self.save_token()
+            self.skip_whitespaces()
+            self.assert_current_token_content(')')
+            if self.space_within("Empty function declaration parentheses"):
+                self.format_to_one_space()
+            else:
+                if not len(self.whitespace_stack) == 0:
+                    self.change_whitespaces_to_none()
+            self.save_token()
+
+            # TODO formatting here
+            self.skip_whitespaces()
+            self.save_whitespaces()
+
+            self.assert_current_token_content('{')
+            self.save_token()
+
+            while self.current_token().content() != '}':
+                self.format_statement()
+                self.skip_whitespaces()
+            self.assert_current_token_content('}')
+            self.save_whitespaces()
+            self.save_token()
+
+    def format_file(self):
+        self.skip_whitespaces()
+        self.save_whitespaces()
+        self.format_function()
+        return self.formatted_tokens
+
+

@@ -1,6 +1,7 @@
 import sys, os, re
 import lexer
 import code_formatter
+from code_formatter import Formatter
 
 
 source_file = "{project_path}/main.cpp"
@@ -18,7 +19,10 @@ with open(source_file, 'r') as infile:
         token_strings.append(token.content())
     print(token_strings)
 
-    formatted = code_formatter.format_file(tokens)
+    formatter = Formatter(tokens)
 
+    formatted = formatter.format_file()
+
+    print(formatted)
     for token in formatted:
         print(token.content(), end='')
