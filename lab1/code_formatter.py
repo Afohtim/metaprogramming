@@ -56,24 +56,34 @@ class Formatter:
     def space_around_operators(self, current_operator):
         # TODO
         # last 2x
-        return current_operator in ['=', '+=', '-=', '*=', '/=', '%=', '<<=', '>>=', '&=', '|=', '^='] and self.config["Spaces"]["Around operators"]["Assignment"]\
+        return current_operator in ['=', '+=', '-=', '*=', '/=', '%=', '<<=', '>>=', '&=', '|=', '^='] \
+               and self.config["Spaces"]["Around operators"]["Assignment"]\
                or current_operator in ['&&', '||'] and self.config["Spaces"]["Around operators"]["Logical"]\
                or current_operator in ['==', '!='] and self.config["Spaces"]["Around operators"]["Equality"]\
-               or current_operator in ['<', '>', '<=', '>=', '<=>'] and self.config["Spaces"]["Around operators"]["Relational"] \
+               or current_operator in ['<', '>', '<=', '>=', '<=>'] \
+               and self.config["Spaces"]["Around operators"]["Relational"] \
                or current_operator in ['&', '|', '^'] and self.config["Spaces"]["Around operators"]["Bitwise"] \
                or current_operator in ['+', '-'] and self.config["Spaces"]["Around operators"]["Additive"] \
                or current_operator in ['*', '/', "%"] and self.config["Spaces"]["Around operators"]["Multiplicative"] \
                or current_operator in ['<<', '>>'] and self.config["Spaces"]["Around operators"]["Shift"] \
-               or current_operator in ['!', '-', '+', '++', '--'] and self.config["Spaces"]["Around operators"]["Unary"] \
+               or current_operator in ['!', '-', '+', '++', '--'] \
+               and self.config["Spaces"]["Around operators"]["Unary"] \
                or current_operator in [] and self.config["Spaces"]["Around operators"]["-> in return type"] \
-               or current_operator in ['->', '.', '->*', '.*'] and self.config["Spaces"]["Around operators"]["Pointer-to-member"] \
+               or current_operator in ['->', '.', '->*', '.*'] \
+               and self.config["Spaces"]["Around operators"]["Pointer-to-member"] \
 
+
+    def space_before_left_brace(self, id):
+        return self.config["Spaces"]["Before Left Brace"][id]
 
     def space_within(self, current_statement):
         return self.config["Spaces"]["Within"][current_statement]
 
+    def space_other(self, id):
+        return self.config["Spaces"]["Other"][id]
+
     def format_file_(self, token_list):
-        config = self.load_json()
+        # deprecated
         previous_token = None
         formatted_token_list = []
         whitespace_stack = []
@@ -140,15 +150,36 @@ class Formatter:
         # TODO push to changes
         self.changes.append("space")
 
+    def format_whitespaces_to_space(self):
+        self.change_whitespaces_to_space()
+        self.save_whitespaces()
+
     def change_whitespaces_to_none(self):
         self.whitespace_stack = []
         # TODO push to changes
         self.changes.append("none")
 
+    def format_whitespaces_to_none(self):
+        self.change_whitespaces_to_none()
+        self.save_whitespaces()
+
     def change_next_to_space(self):
         self.skip_whitespaces()
         if not self.is_one_space_on_stack():
             self.format_to_one_space()
+
+    def format_space_before_current_token(self, is_space_needed=True):
+        if is_space_needed:
+            self.format_whitespaces_to_space()
+        else:
+            self.format_whitespaces_to_none()
+
+    def format_space_after_current_token(self, is_space_needed=True):
+        self.skip_whitespaces()
+        if is_space_needed:
+            self.format_whitespaces_to_space()
+        else:
+            self.format_whitespaces_to_none()
 
     def is_one_space_on_stack(self):
         return len(self.whitespace_stack) == 1 and self.whitespace_stack[0] == ' '
@@ -196,34 +227,88 @@ class Formatter:
         self.format_binary_operator()
 
     def format_expression(self):
-        if self.current_token().is_identifier():
-            pass
-        else:
-            self.format_conditional_expression()
+        # TODO assignment
+        self.format_conditional_expression()
 
     def format_declaration(self):
         # TODO
         if self.current_token().is_type():
-            self.save_token()
+            declaration_flag = True
+            self.save_token()  # type
+            while declaration_flag:
+                declaration_flag = False
+                self.skip_whitespaces()
+                pointers = False
+                last_pointer = None
+                while self.current_token().content() in ['&', '*']:
+                    if not pointers:
+                        pointers = True
+                        if self.current_token().content() == '*':
+                            self.format_space_before_current_token(self.space_other("Before * in declaration"))
+                        else:
+                            self.format_space_before_current_token(self.space_other("Before & in declaration"))
+                    else:
+                        self.format_whitespaces_to_none()
+                    self.save_token()
+                    self.skip_whitespaces()
+                    last_pointer = self.current_token().content()
+                if pointers:
+                    if last_pointer == '*':
+                        self.format_space_after_current_token(self.space_other("After * in declaration"))
+                    else:
+                        self.format_space_after_current_token(self.space_other("After & in declaration"))
+
+                    self.skip_whitespaces()
+                self.assert_current_token_type(TokenType.identifier)
+                self.save_whitespaces()  # TODO formatting?
+                self.save_token()  # id
+                self.skip_whitespaces()
+                if self.current_token().content() not in [',', ';']:
+                    # TODO formatting in declaration =
+                    if self.current_token().content() == '=':
+                        self.format_space_before_current_token(self.space_around_operators('='))
+                        self.save_token()
+                        self.format_space_after_current_token(self.space_around_operators('='))
+                        self.format_expression()
+                    elif self.current_token().content() == ':':
+                        self.format_space_before_current_token(self.space_other("Before colon in bit field"))
+                        self.save_token()
+                        self.format_space_after_current_token(self.space_other("After colon in bit field"))
+                        self.format_expression()
+                    else:
+                        self.assert_current_token_content('=')
+
+                self.skip_whitespaces()
+                if self.current_token().content() == ',':
+                    # TODO formatting
+                    declaration_flag = True
+                    self.format_space_before_current_token(self.space_other('Before comma'))
+                    self.save_token()
+                    self.format_space_after_current_token(self.space_other('After comma'))
+                else:
+                    self.assert_current_token_content(';')
+                    self.save_whitespaces()
+                    self.save_token()
 
     def format_if(self):
-        self.format_if()
         self.save_token()
 
         self.skip_whitespaces()
         self.assert_current_token_content('(')
-        if self.space_before_parentheses('if'):
-            self.format_to_one_space()
-            self.save_token()
-        else:
-            if not len(self.whitespace_stack) == 0:
-                self.change_whitespaces_to_none()
+        self.format_space_before_current_token(self.space_before_parentheses('if'))
+        self.save_token()
 
         self.skip_whitespaces()
         if self.space_within('if parentheses'):
-            self.format_to_one_space()
+            self.format_space_before_current_token()
             self.format_expression()
             self.format_to_one_space()
+        else:
+            self.format_space_before_current_token(False)
+            self.format_expression()
+            self.skip_whitespaces()
+            self.change_whitespaces_to_none()
+
 
         self.assert_current_token_content(')')
         self.save_token()
@@ -233,26 +318,63 @@ class Formatter:
         self.scope_stack.pop()
         # TODO add else
 
+    def format_scope(self):
+        if len(self.scope_stack) > 0 and self.scope_stack[-1] in ['if', 'else', 'for', 'while', 'do', 'switch',
+                                                                  'try', 'catch']:
+            current_statement = self.scope_stack[-1]
+            if current_statement == 'if':
+                self.format_space_before_current_token(self.space_before_left_brace('if'))
+            elif current_statement == 'else':
+                pass
+            elif current_statement == 'for':
+                pass
+            elif current_statement == 'while':
+                pass
+            elif current_statement == 'do':
+                pass
+            elif current_statement == 'switch':
+                pass
+            elif current_statement == 'try':
+                pass
+            elif current_statement == 'catch':
+                pass
+            self.save_token()
+            self.skip_whitespaces()
+            while self.current_token().content() != '}':
+                self.format_statement()
+                self.skip_whitespaces()
+            self.save_whitespaces()
+            self.save_token()
+
     def format_statement(self):
         # TODO whitespaces formatting
         self.skip_whitespaces()
-        self.save_whitespaces()
 
         if self.current_token().content() == 'if':
+            self.save_whitespaces()
             self.format_if()
         elif self.current_token().content() == 'for':
+            self.save_whitespaces()
             self.format_for()
         elif self.current_token().content() == 'while':
+            self.save_whitespaces()
             self.format_while()
         elif self.current_token().content() == 'do':
+            self.save_whitespaces()
             self.format_do_while()
         elif self.current_token().content() == 'switch':
+            self.save_whitespaces()
             self.format_switch()
         elif self.current_token().content() == 'try':
+            self.save_whitespaces()
             self.format_try_catch()
         elif self.current_token().is_type():
+            self.save_whitespaces()
             self.format_declaration()
+        elif self.current_token().content() == '{':
+            self.format_scope()
         else:
+            self.save_whitespaces()
             self.format_expression()
             self.assert_current_token_content(';')
             self.save_token()
