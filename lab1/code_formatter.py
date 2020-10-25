@@ -82,6 +82,9 @@ class Formatter:
     def space_other(self, id):
         return self.config["Spaces"]["Other"][id]
 
+    def space_in_ternary(self, id):
+        return self.config["Spaces"]["In Ternary Operator"][id]
+
     def format_file_(self, token_list):
         # deprecated
         previous_token = None
@@ -196,7 +199,7 @@ class Formatter:
             self.format_expression()
             self.assert_current_token_content(')')
             self.save_token()
-        elif self.current_token().content().isnumeric() or self.current_token().is_identifier():
+        elif self.current_token().is_literal() or self.current_token().is_identifier():
             self.save_token()
         else:
             self.errors.append("expected factor but got \"{}\" at Ln {}, Col {}"
@@ -212,7 +215,7 @@ class Formatter:
     def format_binary_operator(self):
         self.format_unary_expression()
         self.skip_whitespaces()
-        while self.current_token().is_operator():
+        while self.current_token().is_operator() and self.current_token().content() not in [':', '?']:
             if self.space_around_operators(self.current_token().content()):
                 self.format_to_one_space()
                 self.save_token()
@@ -222,16 +225,36 @@ class Formatter:
                 # TODO
                 pass
             self.format_unary_expression()
+            self.skip_whitespaces()
 
     def format_conditional_expression(self):
         self.format_binary_operator()
+        self.skip_whitespaces()
+        if self.current_token().content() == '?':
+            self.format_space_before_current_token(self.space_in_ternary("Before ?"))
+            self.save_token()
+            self.skip_whitespaces()
+            if self.current_token().content() == ':':
+                self.space_in_ternary("Between")
+            else:
+                self.format_space_after_current_token(self.space_in_ternary("After ?"))
+
+                self.format_expression()
+
+                self.skip_whitespaces()
+                self.assert_current_token_content(':')
+
+                self.format_space_before_current_token(self.space_in_ternary("Before :"))
+            self.save_token()
+            self.format_space_after_current_token(self.space_in_ternary("After :"))
+            self.format_expression()
+
 
     def format_expression(self):
         # TODO assignment
         self.format_conditional_expression()
 
     def format_declaration(self):
-        # TODO
         if self.current_token().is_type():
             declaration_flag = True
             self.save_token()  # type
@@ -299,16 +322,10 @@ class Formatter:
         self.save_token()
 
         self.skip_whitespaces()
-        if self.space_within('if parentheses'):
-            self.format_space_before_current_token()
-            self.format_expression()
-            self.format_to_one_space()
-        else:
-            self.format_space_before_current_token(False)
-            self.format_expression()
-            self.skip_whitespaces()
-            self.change_whitespaces_to_none()
 
+        self.format_space_before_current_token(self.space_within('if parentheses'))
+        self.format_expression()
+        self.format_space_after_current_token(self.space_within('if parentheses'))
 
         self.assert_current_token_content(')')
         self.save_token()
@@ -318,26 +335,150 @@ class Formatter:
         self.scope_stack.pop()
         # TODO add else
 
-    def format_scope(self):
+        self.skip_whitespaces()
+        if self.current_token().content() == 'else':
+            self.scope_stack.append('else')
+            self.format_statement()
+            self.scope_stack.pop()
+
+    def format_for(self):
+        self.save_token()
+
+        self.skip_whitespaces()
+        self.assert_current_token_content('(')
+        self.format_space_before_current_token(self.space_before_parentheses('for'))
+        self.save_token()
+
+        self.skip_whitespaces()
+
+        self.format_space_before_current_token(self.space_within('for parentheses'))
+        # TODO for conditions
+        if self.current_token().is_type:
+            self.format_declaration()
+        else:
+            self.format_expression()
+        self.assert_current_token_content(';')
+        self.save_token()
+        self.format_expression()
+        self.assert_current_token_content(';')
+        self.save_token()
+        self.format_expression()
+
+        self.format_space_after_current_token(self.space_within('for parentheses'))
+
+        self.assert_current_token_content(')')
+        self.save_token()
+        # TODO add indent
+        self.scope_stack.append('for')
+        self.format_statement()
+        self.scope_stack.pop()
+
+    def format_while(self):
+        self.save_token()
+
+        self.skip_whitespaces()
+        self.assert_current_token_content('(')
+        self.format_space_before_current_token(self.space_before_parentheses('while'))
+        self.save_token()
+
+        self.skip_whitespaces()
+
+        self.format_space_before_current_token(self.space_within('while parentheses'))
+        self.format_expression()
+        self.format_space_after_current_token(self.space_within('while parentheses'))
+
+        self.assert_current_token_content(')')
+        self.save_token()
+        # TODO add indent
+        self.scope_stack.append('while')
+        self.format_statement()
+        self.scope_stack.pop()
+
+    def format_do_while(self):
+        self.save_token()
+
+        # TODO add indent
+        self.scope_stack.append('do')
+        self.format_statement()
+        self.scope_stack.pop()
+
+        self.skip_whitespaces()
+        self.assert_current_token_content('while')
+        self.format_to_one_space()  # TODO
+        self.save_token()
+
+        self.assert_current_token_content('(')
+        self.format_space_before_current_token(self.space_before_parentheses('while'))
+        self.save_token()
+
+        self.skip_whitespaces()
+
+        self.format_space_before_current_token(self.space_within('while parentheses'))
+        self.format_expression()
+        self.format_space_after_current_token(self.space_within('while parentheses'))
+
+        self.assert_current_token_content(')')
+        self.save_token()
+
+        self.assert_current_token_content(';')
+        self.save_token()
+
+    def format_switch(self):
+        self.save_token()
+
+        self.skip_whitespaces()
+        self.assert_current_token_content('(')
+        self.format_space_before_current_token(self.space_before_parentheses('switch'))
+        self.save_token()
+
+        self.skip_whitespaces()
+
+        self.format_space_before_current_token(self.space_within('switch parentheses'))
+        self.format_expression()
+        self.format_space_after_current_token(self.space_within('switch parentheses'))
+
+        self.assert_current_token_content(')')
+        self.save_token()
+        # TODO add indent
+        self.scope_stack.append('switch')
+        self.format_statement()
+        self.scope_stack.pop()
+
+    def format_case(self):
+        self.save_token()
+
+        self.skip_whitespaces()
+        self.format_whitespaces_to_space()
+        self.format_expression()
+        self.skip_whitespaces()
+        self.format_whitespaces_to_none()
+        self.assert_current_token_content(':')
+        self.save_token()
+
+        self.scope_stack.append('case')
+        self.format_statement()
+        self.scope_stack.pop()
+
+    def format_braces(self):
         if len(self.scope_stack) > 0 and self.scope_stack[-1] in ['if', 'else', 'for', 'while', 'do', 'switch',
                                                                   'try', 'catch']:
             current_statement = self.scope_stack[-1]
             if current_statement == 'if':
                 self.format_space_before_current_token(self.space_before_left_brace('if'))
             elif current_statement == 'else':
-                pass
+                self.format_space_before_current_token(self.space_before_left_brace('else'))
             elif current_statement == 'for':
-                pass
+                self.format_space_before_current_token(self.space_before_left_brace('for'))
             elif current_statement == 'while':
-                pass
+                self.format_space_before_current_token(self.space_before_left_brace('while'))
             elif current_statement == 'do':
-                pass
+                self.format_space_before_current_token(self.space_before_left_brace('do'))
             elif current_statement == 'switch':
-                pass
+                self.format_space_before_current_token(self.space_before_left_brace('switch'))
             elif current_statement == 'try':
-                pass
+                self.format_space_before_current_token(self.space_before_left_brace('try'))
             elif current_statement == 'catch':
-                pass
+                self.format_space_before_current_token(self.space_before_left_brace('catch'))
             self.save_token()
             self.skip_whitespaces()
             while self.current_token().content() != '}':
@@ -365,6 +506,9 @@ class Formatter:
         elif self.current_token().content() == 'switch':
             self.save_whitespaces()
             self.format_switch()
+        elif self.current_token().content() == 'case':
+            self.save_whitespaces()
+            self.format_case()
         elif self.current_token().content() == 'try':
             self.save_whitespaces()
             self.format_try_catch()
@@ -372,7 +516,7 @@ class Formatter:
             self.save_whitespaces()
             self.format_declaration()
         elif self.current_token().content() == '{':
-            self.format_scope()
+            self.format_braces()
         else:
             self.save_whitespaces()
             self.format_expression()

@@ -34,6 +34,9 @@ class Token:
     def is_operator(self):
         return self.__token_type == TokenType.operator
 
+    def is_literal(self):
+        return self.__token_type in [TokenType.char, TokenType.string, TokenType.numeric]
+
     def line(self):
         return self.__line
 
