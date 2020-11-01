@@ -10,6 +10,7 @@ class TokenType(enum.Enum):
     char = 5
     string = 6
     numeric = 7
+    preprocessor_directive = 8
 
 
 class Token:
@@ -90,6 +91,14 @@ def lex(code):
                 if char == '\n':
                     line += 1
                     line_start = i
+            elif i == line_start + 1 and code[i] == '#':
+                char = ''
+                while code[i] != '\n':
+                    char += code[i]
+                    i += 1
+                i -= 1
+                token_list.append(Token(char, TokenType.preprocessor_directive, line, i - line_start))
+
             elif char in separators:
                 token_list.append(Token(char, TokenType.separator, line, i - line_start))
             elif char in operators.keys():

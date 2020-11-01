@@ -3,6 +3,20 @@ from lexer import TokenType
 import json
 
 
+class Whitespaces:
+    @staticmethod
+    def space():
+        return Token(' ', TokenType.whitespace)
+
+    @staticmethod
+    def eol():
+        return Token('\n', TokenType.whitespace)
+
+    @staticmethod
+    def tab():
+        return Token('\t', TokenType.whitespace)
+
+
 class Formatter:
     def __init__(self, tokens, config_file='config.json'):
         self.i = 0
@@ -10,12 +24,19 @@ class Formatter:
         self.formatted_tokens = []
         self.changes = []
         self.errors = []
-        self.scope_stack = ["program"]
+        self.scope_stack = []
         self.tokens = tokens
         self.config = self.load_json(config_file)
         self.types = []
         self.token_checkpoint = [self.i, self.whitespace_stack, self.formatted_tokens, self.changes, self.errors, self.scope_stack]
         self.current_class_name = None
+
+        self.tab = None
+        if self.config["Tabs and Indents"]["Use tab"]:
+            self.tab = [Whitespaces.tab()]
+        else:
+            self.tab = [Whitespaces.space() for i in range(self.config["Tabs and Indents"]["Tab size"])]
+
 
     @staticmethod
     def load_json(config_file):
@@ -83,6 +104,9 @@ class Formatter:
     def space_in_ternary(self, id):
         return self.config["Spaces"]["In Ternary Operator"][id]
 
+    def braces_placement(self, id):
+        return self.config["Wrapping and Braces"]["Braces placement"][id]
+
     def format_file_(self, token_list):
         # deprecated
         previous_token = None
@@ -112,7 +136,9 @@ class Formatter:
         return formatted_token_list
 
     def current_token(self):
-        return self.tokens[self.i]
+        if self.i < len(self.tokens):
+            return self.tokens[self.i]
+        return Token('', TokenType.separator)
 
     def lookup_token(self, i=1):
         return self.tokens[self.i + i]
@@ -201,6 +227,36 @@ class Formatter:
         else:
             self.format_whitespaces_to_none()
 
+    def format_tabs(self, i=0):
+        expected_indent = self.tab * (len(self.scope_stack) + i)
+        self.skip_whitespaces()
+        is_wrong = False
+        if len(expected_indent) != len(self.whitespace_stack):
+            is_wrong = True
+        else:
+            for i, j in zip(expected_indent, self.whitespace_stack):
+                if i != j:
+                    is_wrong = True
+                    break
+        if is_wrong:
+            self.errors.append("wrong indent at {}:{}"
+                               .format(self.current_token().content(), self.current_token().line(),
+                                       self.current_token().column()))
+        self.whitespace_stack = []
+        self.formatted_tokens += expected_indent
+
+    def add_eol(self):
+        self.skip_whitespaces()
+        if len(self.whitespace_stack) == 1 and self.whitespace_stack[0].content() == '\n':
+            self.save_whitespaces()
+        else:
+            self.formatted_tokens.append(Whitespaces.eol())
+            self.errors.append("expected end of line at {}:{}"
+                               .format(self.current_token().content(), self.current_token().line(),
+                                       self.current_token().column()))
+        self.whitespace_stack = []
+
+
     def is_one_space_on_stack(self):
         return len(self.whitespace_stack) == 1 and self.whitespace_stack[0] == ' '
 
@@ -230,7 +286,7 @@ class Formatter:
             if self.current_token().content() == '(':
                 self.format_space_before_current_token(self.space_before_parentheses("Function call"))
                 self.format_factor()  # basically a goto
-            elif self.current_token().content() == '.':
+            elif self.current_token().content() in ['.', '->']:
                 self.format_space_before_current_token(False)
                 self.save_token()
                 self.format_space_after_current_token(False)
@@ -247,7 +303,7 @@ class Formatter:
             self.format_factor()
         else:
             self.errors.append("expected factor but got \"{}\" at Ln {}, Col {}"
-                               .format(self.current_token().content(),self.current_token().line(),
+                               .format(self.current_token().content(), self.current_token().line(),
                                        self.current_token().column()))
 
     def format_unary_expression(self):
@@ -354,7 +410,7 @@ class Formatter:
                     self.format_space_after_current_token(self.space_other('After comma'))
                 else:
                     self.assert_current_token_content(';')
-                    self.save_whitespaces()
+                    #self.save_whitespaces()
                     self.save_token()
 
     def format_if(self):
@@ -500,6 +556,8 @@ class Formatter:
         self.save_token()
 
         self.scope_stack.append('case')
+        self.skip_whitespaces()
+        self.add_eol()
         self.format_statement()
         self.scope_stack.pop()
 
@@ -509,65 +567,87 @@ class Formatter:
             current_statement = self.scope_stack[-1]
             if current_statement == 'if':
                 self.format_space_before_current_token(self.space_before_left_brace('if'))
+                if self.braces_placement("Other") != "End of line":
+                    self.add_eol()
             elif current_statement == 'else':
                 self.format_space_before_current_token(self.space_before_left_brace('else'))
+                if self.braces_placement("Other") != "End of line":
+                    self.add_eol()
             elif current_statement == 'for':
                 self.format_space_before_current_token(self.space_before_left_brace('for'))
+                if self.braces_placement("Other") != "End of line":
+                    self.add_eol()
             elif current_statement == 'while':
                 self.format_space_before_current_token(self.space_before_left_brace('while'))
+                if self.braces_placement("Other") != "End of line":
+                    self.add_eol()
             elif current_statement == 'do':
                 self.format_space_before_current_token(self.space_before_left_brace('do'))
+                if self.braces_placement("Other") != "End of line":
+                    self.add_eol()
             elif current_statement == 'switch':
                 self.format_space_before_current_token(self.space_before_left_brace('switch'))
+                if self.braces_placement("Other") != "End of line":
+                    self.add_eol()
             elif current_statement == 'try':
                 self.format_space_before_current_token(self.space_before_left_brace('try'))
+                if self.braces_placement("Other") != "End of line":
+                    self.add_eol()
             elif current_statement == 'catch':
                 self.format_space_before_current_token(self.space_before_left_brace('catch'))
+                if self.braces_placement("Other") != "End of line":
+                    self.add_eol()
+
             self.save_token()
             self.skip_whitespaces()
+            if self.braces_placement("Other") == "End of line":
+                self.add_eol()
             while self.current_token().content() != '}':
                 self.format_statement()
                 self.skip_whitespaces()
-            self.save_whitespaces()
+            self.format_tabs(-1)
             self.save_token()
 
     def format_statement(self):
         # TODO whitespaces formatting
         self.skip_whitespaces()
 
+        eol_needed = True
         if self.current_token().content() == 'if':
-            self.save_whitespaces()
+            self.format_tabs()
             self.format_if()
         elif self.current_token().content() == 'for':
-            self.save_whitespaces()
+            self.format_tabs()
             self.format_for()
         elif self.current_token().content() == 'while':
-            self.save_whitespaces()
+            self.format_tabs()
             self.format_while()
         elif self.current_token().content() == 'do':
-            self.save_whitespaces()
+            self.format_tabs()
             self.format_do_while()
         elif self.current_token().content() == 'switch':
-            self.save_whitespaces()
+            self.format_tabs()
             self.format_switch()
         elif self.current_token().content() == 'case':
-            self.save_whitespaces()
+            self.format_tabs()
             self.format_case()
+            eol_needed = False
         elif self.current_token().content() == 'try':
-            self.save_whitespaces()
+            self.format_tabs()
             self.format_try_catch()
         elif self.current_token().is_type() or self.current_token().content() in self.types:
-            self.save_whitespaces()
+            self.format_tabs()
             self.format_declaration()
         elif self.current_token().content() == '{':
             self.format_braces()
+            eol_needed = False
         else:
-            self.save_whitespaces()
+            self.format_tabs()
             self.format_expression()
             self.assert_current_token_content(';')
             self.save_token()
-
-        pass
+        if eol_needed:
+            self.add_eol()
 
     def format_function(self, is_contructor=False):
         if not is_contructor:
@@ -616,32 +696,39 @@ class Formatter:
                 self.change_whitespaces_to_none()
         self.save_token()
 
-        # TODO formatting here
         self.skip_whitespaces()
-        self.save_whitespaces()
 
-        self.scope_stack.append("function")
         self.assert_current_token_content('{')
+        if self.braces_placement("In functions") == "End of line":
+            self.format_space_before_current_token(self.space_before_left_brace("Function"))
+        else:
+            self.add_eol()
+            self.format_tabs()
         self.save_token()
 
+        if self.braces_placement("In functions") == "End of line":
+            self.add_eol()
+
+        self.scope_stack.append("function")
         while self.current_token().content() != '}':
             self.format_statement()
             self.skip_whitespaces()
         self.assert_current_token_content('}')
-        self.save_whitespaces()
-        self.save_token()
         self.scope_stack.pop()
+        self.format_tabs()
+        self.save_token()
 
     def format_class_statement(self):
         self.skip_whitespaces()
-        self.save_whitespaces()
         if self.current_token().content() in ['public', 'private', 'protected']:
             # TODO indent
+            self.format_tabs(-1)
             self.save_token()
             self.format_space_after_current_token(False)
             self.assert_current_token_content(':')
             self.save_token()
         elif self.current_token().content() == self.current_class_name:
+            self.format_tabs()
             i = 1
             while self.lookup_token(i).is_whitespace():
                 i += 1
@@ -650,6 +737,7 @@ class Formatter:
             else:
                 self.format_declaration()
         else:
+            self.format_tabs()
             self.set_token_checkpoint()
             self.assert_current_token_is_type()
             self.save_token()
@@ -664,6 +752,7 @@ class Formatter:
             else:
                 self.return_to_token_checkpoint()
                 self.format_declaration()
+        self.add_eol()
 
     def format_class(self):
         if self.current_token().content() in ['class', 'struct']:
@@ -673,15 +762,23 @@ class Formatter:
             self.types.append(self.current_token().content())
             self.current_class_name = self.current_token().content()
             self.save_token()
-            self.format_space_after_current_token(self.space_before_left_brace("Class/structure"))
+
             self.assert_current_token_content('{')
+            if self.braces_placement("In functions") == "End of line":
+                self.format_space_before_current_token(self.space_before_left_brace("Class/structure"))
+            else:
+                self.add_eol()
+                self.format_tabs()
             self.save_token()
+
+            if self.braces_placement("In functions") == "End of line":
+                self.add_eol()
 
             self.scope_stack.append('class')
             while self.current_token().content() != '}':
                 self.format_class_statement()
                 self.skip_whitespaces()
-                self.save_whitespaces()
+                #self.save_whitespaces()
             self.save_token()
             self.assert_current_token_content(';')
             self.save_token()
@@ -689,15 +786,22 @@ class Formatter:
             self.current_class_name = None
 
     def format_file(self):
+        first = True
         while self.i < len(self.tokens):
+            if not first and self.current_token().type() != TokenType.preprocessor_directive:
+                self.add_eol()
+            first = False
             self.skip_whitespaces()
-            self.save_whitespaces()
+            #self.save_whitespaces()
             if self.current_token().is_type() or self.current_token().content() in self.types:
                 self.format_function()
             elif self.current_token().content() in ['class', 'struct']:
                 self.format_class()
+            elif self.current_token().type() == TokenType.preprocessor_directive:
+                self.save_token()
             else:
                 self.fail("expected class or function at {}:{}".format(self.current_token().line(), self.current_token().column()))
+            self.add_eol()
         return self.formatted_tokens
 
 

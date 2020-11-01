@@ -1,13 +1,5 @@
-class Meta{
-private:
-    int a=0;
-    Meta meta=Meta();
-public:
-    Meta(){}
-    void set_a(int b, int c){
-        this . a=b+c;
-    }
-};
+#include <iostream>
+#include "meta.h"
 
 int main(){
     int a = 0 ,b=9;
@@ -29,7 +21,6 @@ int main(){
     switch(a){
         case 0: a;
     }
-
     1+1;
     44*1+3/2;
 }

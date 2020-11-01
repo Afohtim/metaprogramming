@@ -3,4 +3,4 @@ project(project)
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_executable(project main.cpp)
+add_executable(project main.cpp meta.h cmake-build-debug/meta.cpp)
