@@ -13,6 +13,9 @@ class Formatter:
         self.scope_stack = ["program"]
         self.tokens = tokens
         self.config = self.load_json(config_file)
+        self.types = []
+        self.token_checkpoint = [self.i, self.whitespace_stack, self.formatted_tokens, self.changes, self.errors, self.scope_stack]
+        self.current_class_name = None
 
     @staticmethod
     def load_json(config_file):
@@ -32,11 +35,6 @@ class Formatter:
             # TODO exception
             self.fail("expected \"{str}\" but got \"{token}\" at {line}:{char}".format(str=string, token=token.content(),
                                                                                   line=token.line(), char=token.char()))
-
-    @staticmethod
-    def token_is_type(token):
-        if token.content() in ["int"]:
-            return True
 
     def assert_token_identifier(self, token):
         if token.is_identifier():
@@ -116,6 +114,16 @@ class Formatter:
     def current_token(self):
         return self.tokens[self.i]
 
+    def lookup_token(self, i=1):
+        return self.tokens[self.i + i]
+
+    def set_token_checkpoint(self):
+        self.token_checkpoint = [self.i, self.whitespace_stack.copy(), self.formatted_tokens.copy(),
+                                 self.changes.copy(), self.errors.copy(), self.scope_stack.copy()]
+
+    def return_to_token_checkpoint(self):
+        self.i, self.whitespace_stack, self.formatted_tokens, self.changes, self.errors, self.scope_stack = self.token_checkpoint
+
     def assert_current_token_content(self, content):
         if self.current_token().content() == content:
             return True
@@ -131,8 +139,17 @@ class Formatter:
         else:
             self.fail(
                 "expected \"{str}\" but got \"{token}\" at {line}:{char}"
-                    .format(str=type, token=self.current_token().type(), line=self.current_token().line(),
-                            char=self.current_token().column()))
+                .format(str=type, token=self.current_token().type(), line=self.current_token().line(),
+                        char=self.current_token().column()))
+
+    def assert_current_token_is_type(self):
+        if self.current_token().is_type() or self.current_token().content() in self.types:
+            return True
+        else:
+            self.fail(
+                "expected type but got \"{token}\" at {line}:{char}"
+                .format(token=self.current_token().content(), line=self.current_token().line(),
+                        char=self.current_token().column()))
 
     def save_token(self):
         self.formatted_tokens.append(self.current_token())
@@ -196,11 +213,38 @@ class Formatter:
         #self.skip_whitespaces()
         if self.current_token().content() == '(':
             self.save_token()
-            self.format_expression()
+            if self.current_token().content() != ')':
+                self.format_expression()
+            self.skip_whitespaces()
+            if self.current_token().content() == ',':
+                self.format_space_before_current_token(self.space_other("Before comma"))
+                self.save_token()
+                self.format_space_after_current_token(self.space_other("After comma"))
             self.assert_current_token_content(')')
             self.save_token()
-        elif self.current_token().is_literal() or self.current_token().is_identifier():
+        elif self.current_token().is_literal():
             self.save_token()
+        elif self.current_token().is_identifier():
+            self.save_token()
+            self.skip_whitespaces()
+            if self.current_token().content() == '(':
+                self.format_space_before_current_token(self.space_before_parentheses("Function call"))
+                self.format_factor()  # basically a goto
+            elif self.current_token().content() == '.':
+                self.format_space_before_current_token(False)
+                self.save_token()
+                self.format_space_after_current_token(False)
+                self.assert_current_token_type(TokenType.identifier)
+                self.format_factor()
+        elif self.current_token().content() == 'this':
+            self.save_token()
+            self.skip_whitespaces()
+            self.assert_current_token_content('.')
+            self.format_space_before_current_token(False)
+            self.save_token()
+            self.format_space_after_current_token(False)
+            self.assert_current_token_type(TokenType.identifier)
+            self.format_factor()
         else:
             self.errors.append("expected factor but got \"{}\" at Ln {}, Col {}"
                                .format(self.current_token().content(),self.current_token().line(),
@@ -255,7 +299,7 @@ class Formatter:
         self.format_conditional_expression()
 
     def format_declaration(self):
-        if self.current_token().is_type():
+        if self.current_token().is_type() or self.current_token().content() in self.types:
             declaration_flag = True
             self.save_token()  # type
             while declaration_flag:
@@ -353,7 +397,7 @@ class Formatter:
 
         self.format_space_before_current_token(self.space_within('for parentheses'))
         # TODO for conditions
-        if self.current_token().is_type:
+        if self.current_token().is_type() or self.current_token().content() in self.types:
             self.format_declaration()
         else:
             self.format_expression()
@@ -512,7 +556,7 @@ class Formatter:
         elif self.current_token().content() == 'try':
             self.save_whitespaces()
             self.format_try_catch()
-        elif self.current_token().is_type():
+        elif self.current_token().is_type() or self.current_token().content() in self.types:
             self.save_whitespaces()
             self.format_declaration()
         elif self.current_token().content() == '{':
@@ -525,47 +569,135 @@ class Formatter:
 
         pass
 
-    def format_function(self):
-        if self.current_token().is_type():
+    def format_function(self, is_contructor=False):
+        if not is_contructor:
+            self.assert_current_token_is_type()
             self.save_token()
             self.change_next_to_space()
+        self.assert_current_token_type(TokenType.identifier)
+        self.save_token()
+        self.skip_whitespaces()
+        self.assert_current_token_content('(')
+        if self.space_before_parentheses('Function declaration'):
+            self.format_to_one_space()
+        else:
+            if not len(self.whitespace_stack) == 0:
+                self.change_whitespaces_to_none()
+        self.save_token()
+        self.skip_whitespaces()
+
+        if self.current_token().content() != ')':
+            arguments_count = 0
+            argument_expected = True
+            self.format_space_before_current_token(self.space_within("Function declaration parentheses"))
+            while argument_expected:
+                arguments_count += 1
+                argument_expected = False
+                self.assert_current_token_is_type()
+                self.save_token()
+                self.format_space_after_current_token(True)
+                self.assert_current_token_type(TokenType.identifier)
+                self.save_token()
+                self.skip_whitespaces()
+                if self.current_token().content() == ',':
+                    self.format_space_before_current_token(self.space_other("Before comma"))
+                    argument_expected = True
+                    self.save_token()
+                    self.format_space_after_current_token(self.space_other("After comma"))
+            self.format_space_after_current_token(self.space_within("Function declaration parentheses"))
+
+
+
+        self.assert_current_token_content(')')
+        if self.space_within("Empty function declaration parentheses"):
+            self.format_to_one_space()
+        else:
+            if not len(self.whitespace_stack) == 0:
+                self.change_whitespaces_to_none()
+        self.save_token()
+
+        # TODO formatting here
+        self.skip_whitespaces()
+        self.save_whitespaces()
+
+        self.scope_stack.append("function")
+        self.assert_current_token_content('{')
+        self.save_token()
+
+        while self.current_token().content() != '}':
+            self.format_statement()
+            self.skip_whitespaces()
+        self.assert_current_token_content('}')
+        self.save_whitespaces()
+        self.save_token()
+        self.scope_stack.pop()
+
+    def format_class_statement(self):
+        self.skip_whitespaces()
+        self.save_whitespaces()
+        if self.current_token().content() in ['public', 'private', 'protected']:
+            # TODO indent
+            self.save_token()
+            self.format_space_after_current_token(False)
+            self.assert_current_token_content(':')
+            self.save_token()
+        elif self.current_token().content() == self.current_class_name:
+            i = 1
+            while self.lookup_token(i).is_whitespace():
+                i += 1
+            if self.lookup_token(i).content() == '(':
+                self.format_function(is_contructor=True)
+            else:
+                self.format_declaration()
+        else:
+            self.set_token_checkpoint()
+            self.assert_current_token_is_type()
+            self.save_token()
+            self.format_space_after_current_token(True)
+            if self.current_token().content() != 'this':
+                self.assert_current_token_type(TokenType.identifier)
+            self.save_token()
+            self.skip_whitespaces()
+            if self.current_token().content() == '(':
+                self.return_to_token_checkpoint()
+                self.format_function()
+            else:
+                self.return_to_token_checkpoint()
+                self.format_declaration()
+
+    def format_class(self):
+        if self.current_token().content() in ['class', 'struct']:
+            self.save_token()
+            self.format_space_after_current_token(True)
             self.assert_current_token_type(TokenType.identifier)
+            self.types.append(self.current_token().content())
+            self.current_class_name = self.current_token().content()
             self.save_token()
-            self.skip_whitespaces()
-            self.assert_current_token_content('(')
-            if self.space_before_parentheses('Function declaration'):
-                self.format_to_one_space()
-            else:
-                if not len(self.whitespace_stack) == 0:
-                    self.change_whitespaces_to_none()
-            self.save_token()
-            self.skip_whitespaces()
-            self.assert_current_token_content(')')
-            if self.space_within("Empty function declaration parentheses"):
-                self.format_to_one_space()
-            else:
-                if not len(self.whitespace_stack) == 0:
-                    self.change_whitespaces_to_none()
-            self.save_token()
-
-            # TODO formatting here
-            self.skip_whitespaces()
-            self.save_whitespaces()
-
+            self.format_space_after_current_token(self.space_before_left_brace("Class/structure"))
             self.assert_current_token_content('{')
             self.save_token()
 
+            self.scope_stack.append('class')
             while self.current_token().content() != '}':
-                self.format_statement()
+                self.format_class_statement()
                 self.skip_whitespaces()
-            self.assert_current_token_content('}')
-            self.save_whitespaces()
+                self.save_whitespaces()
             self.save_token()
+            self.assert_current_token_content(';')
+            self.save_token()
+            self.scope_stack.pop()
+            self.current_class_name = None
 
     def format_file(self):
-        self.skip_whitespaces()
-        self.save_whitespaces()
-        self.format_function()
+        while self.i < len(self.tokens):
+            self.skip_whitespaces()
+            self.save_whitespaces()
+            if self.current_token().is_type() or self.current_token().content() in self.types:
+                self.format_function()
+            elif self.current_token().content() in ['class', 'struct']:
+                self.format_class()
+            else:
+                self.fail("expected class or function at {}:{}".format(self.current_token().line(), self.current_token().column()))
         return self.formatted_tokens
 
 

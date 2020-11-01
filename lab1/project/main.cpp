@@ -1,4 +1,15 @@
-int main() {
+class Meta{
+private:
+    int a=0;
+    Meta meta=Meta();
+public:
+    Meta(){}
+    void set_a(int b, int c){
+        this . a=b+c;
+    }
+};
+
+int main(){
     int a = 0 ,b=9;
     int c :4;
     int d = a > 0 ? a : b;
