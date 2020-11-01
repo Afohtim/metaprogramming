@@ -295,7 +295,7 @@ class Formatter:
         elif self.current_token().content() == 'this':
             self.save_token()
             self.skip_whitespaces()
-            self.assert_current_token_content('.')
+            self.assert_current_token_content('->')
             self.format_space_before_current_token(False)
             self.save_token()
             self.format_space_after_current_token(False)
@@ -507,6 +507,7 @@ class Formatter:
         self.format_to_one_space()  # TODO
         self.save_token()
 
+        self.skip_whitespaces()
         self.assert_current_token_content('(')
         self.format_space_before_current_token(self.space_before_parentheses('while'))
         self.save_token()
@@ -762,6 +763,7 @@ class Formatter:
             self.types.append(self.current_token().content())
             self.current_class_name = self.current_token().content()
             self.save_token()
+            self.skip_whitespaces()
 
             self.assert_current_token_content('{')
             if self.braces_placement("In functions") == "End of line":

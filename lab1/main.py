@@ -4,30 +4,12 @@ import code_formatter
 from code_formatter import Formatter
 
 
-source_file = "{project_path}/main.cpp"
-assembly_file = os.path.splitext(source_file)[0] + ".s"
 
 def get_content(token):
     return token.content()
 
-
-
-
-if __name__ == "__main__":
-    print(sys.argv)
-    source_file = source_file.format(project_path='./project')
-
-    if sys.argv[1] in ['-v', '-verify']:
-        pass  # verify
-    elif sys.argv[1] in ['-f', '-format']:
-        pass
-    elif sys.argv[1] in ['-h', '-help']:
-        pass
-    else:
-        print('use -help to get help')
-
-
-    with open(source_file, 'r') as infile:
+def get_formatted_file(file_path):
+    with open(file_path, 'r') as infile:
         source = infile.read().strip()
 
         tokens = lexer.lex(source)
@@ -40,10 +22,91 @@ if __name__ == "__main__":
         formatter = Formatter(tokens)
 
         formatted = list(map(get_content, formatter.format_file()))
+
+        ret_file = ""
+        for i in formatted:
+            ret_file += i
+
+        #print(formatted)
+        #for token in formatted:
+        #    print(token, end='')
+
+        return ret_file
         # formatted = formatter.format_file()
 
-        '''
-        print(formatted)
-        for token in formatted:
-            print(token, end='')
-        '''
+
+
+if __name__ == "__main__":
+    try:
+        if sys.argv[1] in ['-v', '-verify']:
+            if sys.argv[2] == '-p':
+                print('-p is not available')
+            if sys.argv[2] == '-d':
+                directory_path = sys.argv[3]
+                listdir = os.listdir(directory_path)
+                files = [directory_path + '/' + x for x in listdir if (len(x) > 4 and x[-4:] == '.cpp') or (len(x) > 2 and x[-2:] == '.h')]
+                for file_path in files:
+                    print(file_path, end=' ')
+                    file = open(file_path, 'r').read()
+                    formatted = get_formatted_file(file_path)
+                    if file == formatted:
+                        print('is formatted')
+                    else:
+                        print('is not formatted')
+
+            if sys.argv[2] == '-f':
+                file_path = sys.argv[3]
+                file = open(file_path, 'r').read()
+                formatted = get_formatted_file(file_path)
+                if file == formatted:
+                    print('File is formatted')
+                else:
+                    print('File is not formatted')
+
+        elif sys.argv[1] in ['-f', '-format']:
+            if sys.argv[2] == '-p':
+                print('-p is not available')
+            if sys.argv[2] == '-d':
+                directory_path = sys.argv[3]
+                listdir = os.listdir(directory_path)
+                files = [directory_path + '/' + x for x in listdir if (len(x) > 4 and x[-4:] == '.cpp') or (len(x) > 2 and x[-2:] == '.h')]
+                for file_path in files:
+                    print(file_path, end=' ')
+
+                    formatted = get_formatted_file(file_path)
+                    file = open(file_path, 'w').write(formatted)
+                    print('has been formatted')
+
+            if sys.argv[2] == '-f':
+                file_path = sys.argv[3]
+                file = open(file_path, 'r').read()
+                formatted = get_formatted_file(file_path)
+                print('File has been formatted')
+        elif sys.argv[1] in ['-h', '-help']:
+            print('use python main.py -verify -(d|f) path to verify file or folder')
+            print('use python main.py -format -(d|f) path to format file or folder')
+            print('-d for directories')
+            print('-f for files')
+            print('\'path\' variable is for path to file or folder')
+
+        else:
+            print('use -help to get help')
+    except Exception:
+
+        file_path = './project/main.cpp'
+
+        file = open(file_path, 'r').read()
+        formatted = get_formatted_file(file_path)
+        if file == formatted:
+            print('File is formatted')
+        else:
+            print('File is not formatted')
+            with open('code1.txt', 'w') as txt:
+                txt.write(file)
+            with open('code2.txt', 'w') as txt:
+                txt.write(formatted)
+
+        print('Wrong arguments. Use -help')
+
+
+
