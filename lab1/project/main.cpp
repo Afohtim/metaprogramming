@@ -1,6 +1,9 @@
 #include <iostream>
 #include "meta.h"
 
+int func(){
+return 0;}
+
 int main(){
     int a = 0 ,b=9;
     int c :4;
@@ -23,4 +26,10 @@ int main(){
     }
     1+1;
     44*1+3/2;
+    while(func())
+    {
+        int r = func();
+    }
+
+    func();
 }

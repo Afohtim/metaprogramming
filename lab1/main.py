@@ -10,7 +10,7 @@ def get_content(token):
 
 def get_formatted_file(file_path):
     with open(file_path, 'r') as infile:
-        source = infile.read().strip()
+        source = infile.read()
 
         tokens = lexer.lex(source)
 
@@ -31,9 +31,8 @@ def get_formatted_file(file_path):
         #for token in formatted:
         #    print(token, end='')
 
-        return ret_file
+        return ret_file, formatter.errors
         # formatted = formatter.format_file()
-
 
 
 if __name__ == "__main__":
@@ -93,20 +92,18 @@ if __name__ == "__main__":
             print('use -help to get help')
     except Exception:
 
-        file_path = './project/main.cpp'
+        directory_path = './project'
+        listdir = os.listdir(directory_path)
+        files = [directory_path + '/' + x for x in listdir if
+                 (len(x) > 4 and x[-4:] == '.cpp') or (len(x) > 2 and x[-2:] == '.h')]
+        for file_path in files:
+            print(file_path, end=' ')
 
-        file = open(file_path, 'r').read()
-        formatted = get_formatted_file(file_path)
-        if file == formatted:
-            print('File is formatted')
-        else:
-            print('File is not formatted')
-            with open('code1.txt', 'w') as txt:
-                txt.write(file)
-            with open('code2.txt', 'w') as txt:
-                txt.write(formatted)
-
-        print('Wrong arguments. Use -help')
+            formatted, errors = get_formatted_file(file_path)
+            print(formatted)
+            print(errors)
+            # file = open(file_path, 'w').write(formatted)
+            print('has been formatted')
 
 
 

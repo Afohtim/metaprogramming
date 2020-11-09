@@ -64,7 +64,8 @@ class Formatter:
             return self.assert_token(token, "")
 
     def space_before_parentheses(self, current_statement_string):
-        # TODO
+        if current_statement_string in ["Function declaration", "Function call"]:
+            return self.config["Spaces"]["Before Parentheses"][current_statement_string]
         # Function declaration and Function call
         return current_statement_string == "if" and self.config["Spaces"]["Before Parentheses"]["if"] or \
                current_statement_string == "for" and self.config["Spaces"]["Before Parentheses"]["for"] or \
@@ -240,7 +241,7 @@ class Formatter:
                     break
         if is_wrong:
             self.errors.append("wrong indent at {}:{}"
-                               .format(self.current_token().content(), self.current_token().line(),
+                               .format(self.current_token().line(),
                                        self.current_token().column()))
         self.whitespace_stack = []
         self.formatted_tokens += expected_indent
@@ -252,10 +253,9 @@ class Formatter:
         else:
             self.formatted_tokens.append(Whitespaces.eol())
             self.errors.append("expected end of line at {}:{}"
-                               .format(self.current_token().content(), self.current_token().line(),
+                               .format(self.current_token().line(),
                                        self.current_token().column()))
         self.whitespace_stack = []
-
 
     def is_one_space_on_stack(self):
         return len(self.whitespace_stack) == 1 and self.whitespace_stack[0] == ' '
@@ -265,12 +265,12 @@ class Formatter:
             self.change_whitespaces_to_space()
         self.save_whitespaces()
 
-    def format_factor(self):
+    def format_factor(self, expression_end=';'):
         #self.skip_whitespaces()
         if self.current_token().content() == '(':
             self.save_token()
             if self.current_token().content() != ')':
-                self.format_expression()
+                self.format_expression(expression_end)
             self.skip_whitespaces()
             if self.current_token().content() == ',':
                 self.format_space_before_current_token(self.space_other("Before comma"))
@@ -306,30 +306,21 @@ class Formatter:
                                .format(self.current_token().content(), self.current_token().line(),
                                        self.current_token().column()))
 
-    def format_unary_expression(self):
+    def format_unary_expression(self, expression_end=';'):
         if self.current_token().content() in ['+', '-', '!', '~']:
             # TODO
             pass
         self.format_factor()
 
-    def format_binary_operator(self):
-        self.format_unary_expression()
-        self.skip_whitespaces()
+    def format_binary_operator(self, expression_end=';'):
         while self.current_token().is_operator() and self.current_token().content() not in [':', '?']:
-            if self.space_around_operators(self.current_token().content()):
-                self.format_to_one_space()
-                self.save_token()
-                self.skip_whitespaces()
-                self.format_to_one_space()
-            else:
-                # TODO
-                pass
-            self.format_unary_expression()
+            token_content = self.current_token().content()
+            self.format_space_before_current_token(self.space_around_operators(token_content))
+            self.save_token()
+            self.format_space_after_current_token(self.space_around_operators(token_content))
             self.skip_whitespaces()
 
-    def format_conditional_expression(self):
-        self.format_binary_operator()
-        self.skip_whitespaces()
+    def format_conditional_expression(self, expression_end=';'):
         if self.current_token().content() == '?':
             self.format_space_before_current_token(self.space_in_ternary("Before ?"))
             self.save_token()
@@ -339,7 +330,7 @@ class Formatter:
             else:
                 self.format_space_after_current_token(self.space_in_ternary("After ?"))
 
-                self.format_expression()
+                self.format_expression(expression_ends=':')
 
                 self.skip_whitespaces()
                 self.assert_current_token_content(':')
@@ -347,12 +338,39 @@ class Formatter:
                 self.format_space_before_current_token(self.space_in_ternary("Before :"))
             self.save_token()
             self.format_space_after_current_token(self.space_in_ternary("After :"))
-            self.format_expression()
+            self.format_expression(expression_end)
 
+    def format_token(self, token, expression_end=';'):
+        if token.is_operator() and token.content() not in [':', '?']:
+            self.format_binary_operator(expression_end)
+        elif self.current_token().content() == '?':
+            self.format_conditional_expression(expression_end)
+        elif token.content() in ['('] or token.is_identifier():
+            self.format_factor(expression_end)
+        else:
+            self.save_whitespaces()
+            self.save_token()
 
-    def format_expression(self):
+    def format_expression(self, expression_ends=';'):
         # TODO assignment
-        self.format_conditional_expression()
+        # self.format_conditional_expression()
+        if not isinstance(expression_ends, list):
+            expression_ends = [expression_ends]
+        min_i = 100000
+        for expression_end in expression_ends:
+            i = self.i
+            prt_cnt = 0
+            while (self.tokens[i].content() != expression_end or (expression_end == ')' and prt_cnt > 0)) and i <= min_i:
+                if self.tokens[i].content() == '(':
+                    prt_cnt += 1
+                if self.tokens[i].content() == ')':
+                    prt_cnt -= 1
+                i += 1
+            min_i = min(min_i, i)
+        self.skip_whitespaces()
+        while self.i < min_i:
+            self.format_token(self.current_token())
+            self.skip_whitespaces()
 
     def format_declaration(self):
         if self.current_token().is_type() or self.current_token().content() in self.types:
@@ -392,7 +410,7 @@ class Formatter:
                         self.format_space_before_current_token(self.space_around_operators('='))
                         self.save_token()
                         self.format_space_after_current_token(self.space_around_operators('='))
-                        self.format_expression()
+                        self.format_expression(expression_ends=[';', ',', ':'])
                     elif self.current_token().content() == ':':
                         self.format_space_before_current_token(self.space_other("Before colon in bit field"))
                         self.save_token()
@@ -424,7 +442,7 @@ class Formatter:
         self.skip_whitespaces()
 
         self.format_space_before_current_token(self.space_within('if parentheses'))
-        self.format_expression()
+        self.format_expression(expression_ends=')')
         self.format_space_after_current_token(self.space_within('if parentheses'))
 
         self.assert_current_token_content(')')
@@ -462,7 +480,7 @@ class Formatter:
         self.format_expression()
         self.assert_current_token_content(';')
         self.save_token()
-        self.format_expression()
+        self.format_expression(expression_ends=')')
 
         self.format_space_after_current_token(self.space_within('for parentheses'))
 
@@ -484,7 +502,7 @@ class Formatter:
         self.skip_whitespaces()
 
         self.format_space_before_current_token(self.space_within('while parentheses'))
-        self.format_expression()
+        self.format_expression(expression_ends=')')
         self.format_space_after_current_token(self.space_within('while parentheses'))
 
         self.assert_current_token_content(')')
@@ -515,7 +533,7 @@ class Formatter:
         self.skip_whitespaces()
 
         self.format_space_before_current_token(self.space_within('while parentheses'))
-        self.format_expression()
+        self.format_expression(expression_ends=')')
         self.format_space_after_current_token(self.space_within('while parentheses'))
 
         self.assert_current_token_content(')')
@@ -535,7 +553,7 @@ class Formatter:
         self.skip_whitespaces()
 
         self.format_space_before_current_token(self.space_within('switch parentheses'))
-        self.format_expression()
+        self.format_expression(expression_ends=')')
         self.format_space_after_current_token(self.space_within('switch parentheses'))
 
         self.assert_current_token_content(')')
@@ -550,7 +568,7 @@ class Formatter:
 
         self.skip_whitespaces()
         self.format_whitespaces_to_space()
-        self.format_expression()
+        self.format_expression(expression_ends=':')
         self.skip_whitespaces()
         self.format_whitespaces_to_none()
         self.assert_current_token_content(':')
@@ -601,6 +619,9 @@ class Formatter:
 
             self.save_token()
             self.skip_whitespaces()
+            if self.current_token().content() == '}':
+                self.save_token()
+                return
             if self.braces_placement("Other") == "End of line":
                 self.add_eol()
             while self.current_token().content() != '}':
@@ -698,6 +719,9 @@ class Formatter:
         self.save_token()
 
         self.skip_whitespaces()
+        if self.current_token().content() == ';':
+            self.save_token()
+            return
 
         self.assert_current_token_content('{')
         if self.braces_placement("In functions") == "End of line":
@@ -805,5 +829,7 @@ class Formatter:
                 self.fail("expected class or function at {}:{}".format(self.current_token().line(), self.current_token().column()))
             self.add_eol()
         return self.formatted_tokens
+
+
 
 
