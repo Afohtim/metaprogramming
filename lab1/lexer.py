@@ -111,7 +111,7 @@ def lex(code):
                             operator = possible_operator
                 if operator is not None:
                     i += len(operator) - 1
-                    token_list.append(Token(operator, TokenType.operator, line, i))
+                    token_list.append(Token(operator, TokenType.operator, line, i - line_start))
             elif char == "'":
                 char_literal = "'"
                 j = i

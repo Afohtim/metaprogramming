@@ -194,20 +194,26 @@ class Formatter:
 
     def change_whitespaces_to_space(self):
         self.whitespace_stack = [Token(' ', TokenType.whitespace)]
-        # TODO push to changes
+        self.errors.append("expected space at {}:{}"
+                           .format(self.current_token().line(),
+                           self.current_token().column()))
         self.changes.append("space")
 
     def format_whitespaces_to_space(self):
-        self.change_whitespaces_to_space()
+        if not(len(self.whitespace_stack) == 1 and self.whitespace_stack[0].content() == ' '):
+            self.change_whitespaces_to_space()
         self.save_whitespaces()
 
     def change_whitespaces_to_none(self):
         self.whitespace_stack = []
-        # TODO push to changes
+        self.errors.append("extra whitespaces at {}:{}"
+                           .format(self.current_token().line(),
+                           self.current_token().column()))
         self.changes.append("none")
 
     def format_whitespaces_to_none(self):
-        self.change_whitespaces_to_none()
+        if not len(self.whitespace_stack) == 0:
+            self.change_whitespaces_to_none()
         self.save_whitespaces()
 
     def change_next_to_space(self):
@@ -235,8 +241,10 @@ class Formatter:
         if len(expected_indent) != len(self.whitespace_stack):
             is_wrong = True
         else:
+            while len(self.whitespace_stack) > 0 and self.whitespace_stack[0].content() == '\n':
+                self.whitespace_stack = self.whitespace_stack[1:]
             for i, j in zip(expected_indent, self.whitespace_stack):
-                if i != j:
+                if i.type() != j.type():
                     is_wrong = True
                     break
         if is_wrong:
@@ -247,15 +255,23 @@ class Formatter:
         self.formatted_tokens += expected_indent
 
     def add_eol(self):
+        if self.current_token().content() == '\n':
+            self.save_token()
+            return
         self.skip_whitespaces()
-        if len(self.whitespace_stack) == 1 and self.whitespace_stack[0].content() == '\n':
-            self.save_whitespaces()
+        if len(self.whitespace_stack) > 0 and self.whitespace_stack[0].content() == '\n':
+            self.formatted_tokens.append(self.whitespace_stack[0])
+            self.whitespace_stack = self.whitespace_stack[1:]
         else:
+            self.whitespace_stack = []
             self.formatted_tokens.append(Whitespaces.eol())
-            self.errors.append("expected end of line at {}:{}"
+            if self.current_token().line() is None:
+                pass
+                #self.errors.append("expected end of line in the end of file")
+            else:
+                self.errors.append("expected end of line at {}:{}"
                                .format(self.current_token().line(),
                                        self.current_token().column()))
-        self.whitespace_stack = []
 
     def is_one_space_on_stack(self):
         return len(self.whitespace_stack) == 1 and self.whitespace_stack[0] == ' '
@@ -675,13 +691,13 @@ class Formatter:
         if not is_contructor:
             self.assert_current_token_is_type()
             self.save_token()
-            self.change_next_to_space()
+            self.format_space_after_current_token(True)
         self.assert_current_token_type(TokenType.identifier)
         self.save_token()
         self.skip_whitespaces()
         self.assert_current_token_content('(')
         if self.space_before_parentheses('Function declaration'):
-            self.format_to_one_space()
+            self.format_space_after_current_token(True)
         else:
             if not len(self.whitespace_stack) == 0:
                 self.change_whitespaces_to_none()
@@ -735,6 +751,7 @@ class Formatter:
             self.add_eol()
 
         self.scope_stack.append("function")
+        self.skip_whitespaces()
         while self.current_token().content() != '}':
             self.format_statement()
             self.skip_whitespaces()
