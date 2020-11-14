@@ -10,35 +10,36 @@ def get_content(token):
 
 def get_formatted_file(file_path):
     with open(file_path, 'r') as infile:
-        source = infile.read()
+        try:
+            source = infile.read()
 
-        tokens = lexer.lex(source)
+            tokens = lexer.lex(source)
 
-        token_strings = []
-        for token in tokens:
-            token_strings.append((token.content(), token.line(), token.column()))
-        #print(token_strings)
+            token_strings = []
+            for token in tokens:
+                token_strings.append((token.content(), token.line(), token.column()))
+            #print(token_strings)
 
-        formatter = Formatter(tokens)
+            formatter = Formatter(tokens)
+            formatted = list(map(get_content, formatter.format_file()))
 
-        formatted = list(map(get_content, formatter.format_file()))
 
-        ret_file = ""
-        for i in formatted:
-            ret_file += i
+            ret_file = ""
+            for i in formatted:
+                ret_file += i
 
-        #print(formatted)
-        #for token in formatted:
-        #    print(token, end='')
-
-        return ret_file, formatter.errors
-        # formatted = formatter.format_file()
+            return ret_file, formatter.errors
+        except Exception:
+            return None, None
 
 
 def check_if_formatted(file_path, format_file=False):
     print(file_path, end=' ')
     file = open(file_path, 'r').read()
     formatted, errors = get_formatted_file(file_path)
+    if formatted is None:
+        print('is not recognised')
+        return
     if format_file:
         open(file_path, 'w').write(formatted)
     if not format_file:
