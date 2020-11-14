@@ -41,10 +41,13 @@ def check_if_formatted(file_path, format_file=False):
     formatted, errors = get_formatted_file(file_path)
     if format_file:
         open(file_path, 'w').write(formatted)
-    if file == formatted:
-        print('is formatted')
+    if not format_file:
+        if file == formatted:
+            print('is formatted')
+        else:
+            print('is not formatted')
     else:
-        print('is not formatted')
+        print('was formatted')
 
     with open('log.config', 'r') as log_config:
         to_log = log_config.read()
@@ -58,16 +61,16 @@ def check_if_formatted(file_path, format_file=False):
             logs.write('\n\n')
 
 
-def check_directory_formatting(directory_path):
+def check_directory_formatting(directory_path, format_files=False):
     listdir = os.listdir(directory_path)
     files = [directory_path + '/' + x for x in listdir if
              (len(x) > 4 and x[-4:] == '.cpp') or (len(x) > 2 and x[-2:] == '.h')]
     for file_path in files:
-        check_if_formatted(file_path)
+        check_if_formatted(file_path, format_files)
 
     directories = [directory_path + '/' + x for x in listdir if os.path.isdir(directory_path + '/' + x)]
     for directory in directories:
-        check_directory_formatting(directory)
+        check_directory_formatting(directory, format_files)
 
 
 if __name__ == "__main__":
@@ -91,7 +94,8 @@ if __name__ == "__main__":
 
         elif sys.argv[1] in ['-f', '-format']:
             if sys.argv[2] == '-p':
-                print('-p is not available')
+                directory_path = sys.argv[3]
+                check_directory_formatting(directory_path, format_files=True)
             if sys.argv[2] == '-d':
                 directory_path = sys.argv[3]
                 listdir = os.listdir(directory_path)
@@ -103,8 +107,8 @@ if __name__ == "__main__":
                 file_path = sys.argv[3]
                 check_if_formatted(file_path, format_file=True)
         elif sys.argv[1] in ['-h', '-help']:
-            print('use python main.py -verify -(d|f) path to verify file or folder')
-            print('use python main.py -format -(d|f) path to format file or folder')
+            print('use python main.py -verify -(d|f|p) path to verify file or folder')
+            print('use python main.py -format -(d|f|p) path to format file or folder')
             print('use python main.py -logs -(true|false) to enable or disable logs')
             print('-d for directories')
             print('-f for files')
