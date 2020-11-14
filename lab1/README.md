@@ -6,13 +6,14 @@
 `python main.py -help`
 
 Для перевірки фоматування:
-`python main.py -verify -(d|f) path`
+`python main.py -verify -(d|f|p) path`
 
 Для форматування:
-`python main.py -format -(d|f) path`
+`python main.py -format -(d|f|p) path`
 
 `-d` - для форматування теки
 `-f` - для форматування файлу
+`-p` - для форматування проекту
 `path` - шлях до файлу або теки
 
 Для того, щоб ввімкнути або вимкнути логування помилок форматування

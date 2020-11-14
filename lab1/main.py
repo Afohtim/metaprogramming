@@ -58,6 +58,17 @@ def check_if_formatted(file_path, format_file=False):
             logs.write('\n\n')
 
 
+def check_directory_formatting(directory_path):
+    listdir = os.listdir(directory_path)
+    files = [directory_path + '/' + x for x in listdir if
+             (len(x) > 4 and x[-4:] == '.cpp') or (len(x) > 2 and x[-2:] == '.h')]
+    for file_path in files:
+        check_if_formatted(file_path)
+
+    directories = [directory_path + '/' + x for x in listdir if os.path.isdir(directory_path + '/' + x)]
+    for directory in directories:
+        check_directory_formatting(directory)
+
 
 if __name__ == "__main__":
     with open('errors.log', 'w'):
@@ -65,7 +76,8 @@ if __name__ == "__main__":
     try:
         if sys.argv[1] in ['-v', '-verify']:
             if sys.argv[2] == '-p':
-                print('-p is not available')
+                directory_path = sys.argv[3]
+                check_directory_formatting(directory_path)
             if sys.argv[2] == '-d':
                 directory_path = sys.argv[3]
                 listdir = os.listdir(directory_path)
@@ -108,12 +120,7 @@ if __name__ == "__main__":
         else:
             print('use -help to get help')
     except Exception:
-        directory_path = './project'
-        listdir = os.listdir(directory_path)
-        files = [directory_path + '/' + x for x in listdir if
-                 (len(x) > 4 and x[-4:] == '.cpp') or (len(x) > 2 and x[-2:] == '.h')]
-        for file_path in files:
-            check_if_formatted(file_path)
+        print('wrong usage. use -help')
 
 
 
