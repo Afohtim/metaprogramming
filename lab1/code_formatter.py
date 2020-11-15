@@ -199,14 +199,28 @@ class Formatter:
 
     def skip_whitespaces(self):
         while self.current_token().is_whitespace() or self.current_token().type() == TokenType.comment \
-                or self.current_token().content() in ['constexpr', 'const']:
+                or self.current_token().content() in ['constexpr']:
             if self.current_token().is_whitespace():
                 self.whitespace_stack.append(self.current_token())
                 self.i += 1
             elif self.current_token().type() == TokenType.comment:
+                self.whitespace_stack.append(self.current_token())
+                self.i += 1
+                self.save_whitespaces()
+                '''on_new_line = True
+                i = self.i
+                while i > 0 and (self.tokens[i].content() != '\n' or self.tokens[i].type == TokenType.comment):
+                    if self.tokens[i].is_whitespace():
+                        i -= 1
+                    else:
+                        on_new_line = False
+                if on_new_line:
+                    if len(self.formatted_tokens) > 0 and len(self.whitespace_stack):
+                        self.add_eol()
+                    self.format_tabs(in_ws=True)
                 self.save_token()
                 if self.current_token().is_whitespace():
-                    self.save_token()
+                    self.save_token()'''
             else:
                 if len(self.whitespace_stack) > 0:
                     self.format_space_before_current_token(True)
@@ -255,9 +269,10 @@ class Formatter:
         else:
             self.format_whitespaces_to_none()
 
-    def format_tabs(self, i=0):
+    def format_tabs(self, i=0, in_ws=False):
         expected_indent = self.tab * (len(self.scope_stack) + i)
-        self.skip_whitespaces()
+        if not in_ws:
+            self.skip_whitespaces()
         is_wrong = False
         if len(expected_indent) != len(self.whitespace_stack):
             is_wrong = True
@@ -373,7 +388,7 @@ class Formatter:
         self.format_factor()
 
     def format_binary_operator(self, expression_end=';'):
-        while self.current_token().is_operator() and self.current_token().content() not in [':', '?']:
+        while self.current_token().is_operator() and self.current_token().content() not in [':', '?', '*']:
             token_content = self.current_token().content()
             self.format_space_before_current_token(self.space_around_operators(token_content))
             self.save_token()
@@ -400,18 +415,44 @@ class Formatter:
             self.format_space_after_current_token(self.space_in_ternary("After :"))
             self.format_expression(expression_end)
 
-    def format_token(self, token, expression_end=';'):
-        if token.is_operator() and token.content() not in [':', '?']:
+    def format_token(self, token, expression_end=';', enum=False, in_for=False):
+        if token.is_operator() and token.content() not in [':', '?', '*']:
             self.format_binary_operator(expression_end)
+        elif token.content() == '*':
+            mul = True
+            for token in self.formatted_tokens[::-1]:
+                if token.is_whitespace():
+                    continue
+                if token.is_identifier():
+                    mul = True
+                    break
+                else:
+                    mul = False
+                    break
+            if mul:
+                self.format_binary_operator(expression_end)
+            else:
+                self.save_token()
+                self.format_space_after_current_token(self.space_other("After dereference and address-of"))
+
         elif self.current_token().content() == '?':
             self.format_conditional_expression(expression_end)
         elif token.content() in ['('] or token.is_identifier():
             self.format_factor(expression_end)
+        elif token.content() == ',':
+            self.format_space_before_current_token(self.space_other("Before comma"))
+            self.save_token()
+            if enum:
+                self.add_eol()
+                self.format_tabs()
+            else:
+                self.format_space_after_current_token(self.space_other("After comma"))
+
         else:
             self.save_whitespaces()
             self.save_token()
 
-    def format_expression(self, expression_ends=';'):
+    def format_expression(self, expression_ends=';', enum=False, in_for=False):
         # TODO assignment
         # self.format_conditional_expression()
         if not isinstance(expression_ends, list):
@@ -429,7 +470,7 @@ class Formatter:
             min_i = min(min_i, i)
         self.skip_whitespaces()
         while self.i < min_i:
-            self.format_token(self.current_token())
+            self.format_token(self.current_token(), enum=enum, in_for=in_for)
             self.skip_whitespaces()
 
     def format_declaration(self):
@@ -533,17 +574,21 @@ class Formatter:
         self.skip_whitespaces()
 
         self.format_space_before_current_token(self.space_within('for parentheses'))
-        # TODO for conditions
-        if self.current_token().is_type() or self.current_token().content() in self.types:
+        self.format_expression(')', in_for=True)
+
+        '''if self.current_token().is_type() or self.current_token().content() in self.types:
             self.format_declaration()
         else:
             self.format_expression()
-        self.assert_current_token_content(';')
-        self.save_token()
-        self.format_expression()
-        self.assert_current_token_content(';')
-        self.save_token()
-        self.format_expression(expression_ends=')')
+        if self.current_token().content() == ':':
+
+        else:
+            self.assert_current_token_content(';')
+            self.save_token()
+            self.format_expression()
+            self.assert_current_token_content(';')
+            self.save_token()
+            self.format_expression(expression_ends=')')'''
 
         self.format_space_after_current_token(self.space_within('for parentheses'))
 
@@ -682,6 +727,8 @@ class Formatter:
 
             self.save_token()
             self.skip_whitespaces()
+            if len(self.scope_stack) > 0 and self.scope_stack[-1] in ['if', 'for', 'do', 'switch', 'try']:
+                self.scope_stack[-1] = '{'
             if self.current_token().content() == '}':
                 self.save_token()
                 return
@@ -727,6 +774,8 @@ class Formatter:
             self.format_braces()
             eol_needed = False
         else:
+            if len(self.scope_stack) > 0 and self.scope_stack[-1] in ['if', 'for', 'do', 'switch', 'try']:
+                self.add_eol()
             self.format_tabs()
             self.format_expression()
             self.assert_current_token_content(';')
@@ -736,11 +785,36 @@ class Formatter:
 
     def format_function(self, is_constructor=False):
         if not is_constructor:
-            self.assert_current_token_is_type()
-            self.save_token()
+            # self.assert_current_token_is_type()
+            if self.current_token().type() == TokenType.identifier:
+                self.format_factor()
+            else:
+                self.save_token()
             self.format_space_after_current_token(True)
-        self.assert_current_token_type(TokenType.identifier)
-        self.save_token()
+            first = True
+            last = None
+            while self.current_token().content() in ['*', '&']:
+                if self.current_token().content() == '*':
+                    if first:
+                        self.format_space_before_current_token(self.space_other("Before * in declaration"))
+                    self.save_token()
+                    self.skip_whitespaces()
+                    last = '*'
+                elif self.current_token().content() == '&':
+                    if first:
+                        self.format_space_before_current_token(self.space_other("Before & in declaration"))
+                    self.save_token()
+                    self.skip_whitespaces()
+                    last = '&'
+            if last is not None:
+                self.format_space_after_current_token(self.space_other("After {} in declaration".format(last)))
+        if self.current_token().content() == 'operator':
+            self.save_token()
+            self.format_space_before_current_token(False)
+            self.save_token()
+        else:
+            self.assert_current_token_type(TokenType.identifier)
+            self.save_token()
         self.skip_whitespaces()
         self.assert_current_token_content('(')
         if self.space_before_parentheses('Function declaration'):
@@ -752,6 +826,8 @@ class Formatter:
         self.skip_whitespaces()
 
         formatted_before_token = False
+        first = True
+        last = None
         if self.current_token().content() != ')':
             while self.current_token().content() != ')':
                 if self.current_token().content() == ',':
@@ -760,16 +836,24 @@ class Formatter:
                     self.format_space_after_current_token(self.space_other("After comma"))
                     formatted_before_token = True
                 elif self.current_token().content() == '*':
-                    self.format_space_before_current_token(self.space_other("Before * in declaration"))
+                    if first:
+                        self.format_space_before_current_token(self.space_other("Before * in declaration"))
                     self.save_token()
-                    self.format_space_after_current_token(self.space_other("After * in declaration"))
-                    formatted_before_token = True
+                    self.skip_whitespaces()
+                    last = '*'
+                    formatted_before_token = False
                 elif self.current_token().content() == '&':
-                    self.format_space_before_current_token(self.space_other("Before & in declaration"))
+                    if first:
+                        self.format_space_before_current_token(self.space_other("Before & in declaration"))
                     self.save_token()
-                    self.format_space_after_current_token(self.space_other("After & in declaration"))
-                    formatted_before_token = True
+                    self.skip_whitespaces()
+                    last = '&'
+                    formatted_before_token = False
                 else:
+                    if last is not None:
+                        self.format_space_after_current_token(self.space_other("After {} in declaration".format(last)))
+                        last = None
+                        first = True
                     if not formatted_before_token:
                         self.format_space_before_current_token(True)
                     self.save_token()
@@ -856,6 +940,8 @@ class Formatter:
             self.current_class_name = self.current_token().content()
             self.save_token()
             self.skip_whitespaces()
+            if self.current_token().content() == ':':
+                self.format_expression('{')
 
             self.assert_current_token_content('{')
             if self.braces_placement("In functions") == "End of line":
@@ -879,6 +965,46 @@ class Formatter:
             self.scope_stack.pop()
             self.current_class_name = None
 
+    def format_enum(self):
+        self.save_token()
+        self.skip_whitespaces()
+        if self.current_token().content() == 'class':
+            self.format_space_before_current_token(True)
+            self.save_token()
+            self.format_space_after_current_token(True)
+            self.assert_current_token_type(TokenType.identifier)
+            self.types.append(self.current_token().content())
+            self.current_class_name = self.current_token().content()
+            self.save_token()
+            self.skip_whitespaces()
+            if self.current_token().content() == ':':
+                self.format_expression('{')
+        else:
+            self.format_space_after_current_token(True)
+            self.assert_current_token_type(TokenType.identifier)
+            self.types.append(self.current_token().content())
+            self.current_class_name = self.current_token().content()
+            self.save_token()
+            self.skip_whitespaces()
+            if self.current_token().content() == ':':
+                self.format_expression('{')
+        self.assert_current_token_content('{')
+        self.format_space_before_current_token(self.space_before_left_brace("Class/structure"))
+        self.save_token()
+
+        self.scope_stack.append("enum")
+        self.add_eol()
+        self.format_tabs()
+        self.skip_whitespaces()
+        self.format_expression('}', enum=True)
+        self.scope_stack.pop()
+
+        self.skip_whitespaces()
+        self.assert_current_token_content('}')
+        self.add_eol()
+        self.save_token()
+        self.assert_current_token_content(';')
+        self.save_token()
 
     def format_template(self):
         self.assert_current_token_content('template')
@@ -911,7 +1037,7 @@ class Formatter:
             self.save_token()
             self.skip_whitespaces()
             self.add_eol()
-            if self.current_token().is_type():
+            if self.current_token().is_type() or self.current_token().type() == TokenType.identifier:
                 self.format_function()
             elif self.current_token().content() == 'class':
                 self.format_class()
@@ -926,10 +1052,12 @@ class Formatter:
             first = False
             self.skip_whitespaces()
             #self.save_whitespaces()
-            if self.current_token().is_type() or self.current_token().content() in self.types:
+            if self.current_token().is_type() or self.current_token().type() == TokenType.identifier:
                 self.format_function()
             elif self.current_token().content() in ['class', 'struct']:
                 self.format_class()
+            elif self.current_token().content() == 'enum':
+                self.format_enum()
             elif self.current_token().type() == TokenType.preprocessor_directive:
                 self.save_token()
             elif self.current_token().content() == 'template':
