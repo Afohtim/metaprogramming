@@ -29,7 +29,7 @@ def get_formatted_file(file_path):
                 ret_file += i
 
             return ret_file, formatter.errors
-        except Exception:
+        except Exception as e:
             return None, None
 
 

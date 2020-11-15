@@ -11,6 +11,7 @@ class TokenType(enum.Enum):
     string = 6
     numeric = 7
     preprocessor_directive = 8
+    comment = 9
 
 
 class Token:
@@ -98,6 +99,28 @@ def lex(code):
                     i += 1
                 i -= 1
                 token_list.append(Token(char, TokenType.preprocessor_directive, line, i - line_start))
+            elif code[i] == '/' and len(code) > i + 1 and code[i + 1] == '/':
+                comment = ''
+                while i < len(code) and code[i] != '\n':
+                    comment += code[i]
+                    i += 1
+                comment += '\n'
+                line += 1
+                line_start = i
+                token_list.append(Token(comment, TokenType.comment, line, i - line_start))
+            elif code[i] == '/' and len(code) > i + 1 and code[i + 1] == '*':
+                comment = ''
+                while i + 1 < len(code) and not(code[i] == '*' and code[i+1] == '/'):
+                    comment += code[i]
+                    if code[i] == '\n':
+                        line += 1
+                        line_start = i
+                    i += 1
+                if i + 1 == len(code):
+                    raise Exception('lexer: comment error')
+                i += 1
+                comment += '*/'
+                token_list.append(Token(comment, TokenType.comment, line, i - line_start))
 
             elif char in separators:
                 token_list.append(Token(char, TokenType.separator, line, i - line_start))
