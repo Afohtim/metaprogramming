@@ -1,0 +1,318 @@
+{"Tabs and Indents":
+{
+  "Use tab": false,
+  "Tab size": 4,
+  "Indent": 4,
+  "Continuation indent": 8,
+  "Keep indents on empty lines": false,
+  "Label indent": 0,
+  "Absolute label indent": false,
+  "Indents in lambdas": 4,
+  "Indent members in plain structures": 4,
+  "Indent visibility keywords in class": 0,
+  "Indent members of namespace": 4,
+  "Preprocessor directive indent": 0,
+  "Follow code indent": false
+},
+  "Spaces":
+  {
+    "Before Parentheses":
+    {
+      "Function declaration": false,
+      "Function call": false,
+      "if": true,
+      "for": true,
+      "while": true,
+      "switch": true,
+      "catch": true
+    },
+    "Around operators":
+    {
+      "Assignment": true,
+      "Logical": true,
+      "Equality": true,
+      "Relational": true,
+      "Bitwise": true,
+      "Additive": true,
+      "Multiplicative": true,
+      "Shift": true,
+      "Unary": false,
+      "-> in return type": true,
+      "Pointer-to-member": false
+    },
+    "Before Left Brace":
+    {
+      "Namespace": true,
+      "Initializer list": false,
+      "Class/structure": true,
+      "Function": true,
+      "if": true,
+      "else": true,
+      "for": true,
+      "while": true,
+      "do": true,
+      "switch": true,
+      "try": true,
+      "catch": true
+    },
+    "Before Keywords":
+    {
+      "else": true,
+      "while": true,
+      "catch": true
+    },
+    "Within":
+    {
+      "Code braces": true,
+      "Empty code braces": false,
+      "Array brackets": false,
+      "Lambda capture list brackets": false,
+      "Empty lambda capture list brackets": false,
+      "Initializer list braces": false,
+      "Empty initializer list braces": false,
+      "Grouping parentheses": false,
+      "if parentheses": false,
+      "for parentheses": false,
+      "while parentheses": false,
+      "switch parentheses": false,
+      "catch parentheses": false,
+      "Type cast parentheses": false,
+      "Function declaration parentheses": false,
+      "Empty function declaration parentheses": false,
+      "Function call parentheses": false,
+      "Empty function call parentheses": false
+    },
+    "In Ternary Operator":
+    {
+      "Before ?": true,
+      "After ?": true,
+      "Before :": true,
+      "After :": true,
+      "Between": false
+    },
+    "Other":
+    {
+      "Before comma": false,
+      "After comma": true,
+      "Before for semicolon": false,
+      "After for semicolon": true,
+      "After type cast": true,
+      "Prevent >> concatenation in template": true,
+      "After right brace in structures": true,
+      "Before * in declaration": true,
+      "After * in declaration": false,
+      "Before & in declaration": true,
+      "After & in declaration": false,
+      "After dereference and address-of": false,
+      "Keep space between the same-type brackets": false,
+      "Before colon in bit field": false,
+      "After colon in bit field": true,
+      "Between operator keyword and punctuator": false
+    },
+    "In Template Declaration":
+    {
+      "Before <": false,
+      "Within <>": false,
+      "Within empty <>": false
+    },
+    "In Class":
+    {
+      "Before base class colon": true,
+      "After base class colon": true,
+      "Before constructor initialization list colon": true,
+      "After initialization list colon": true
+    },
+    "In Template Instantiation":
+    {
+      "Before <": false,
+      "Within <>": false,
+      "Within empty <>": false
+    }
+  },
+  "Wrapping and Braces":
+  {
+    "Hard wrap at": "120",
+    "Wrap on typing": false,
+    "Visual guides": "None",
+    "Keep when reformatting":
+    {
+      "Line breaks": true,
+      "Comment at first column": true,
+      "Directive at first column": true,
+      "Control statement in one line": true,
+      "Simple lambdas in one line": true,
+      "Simple functions in one line": true,
+      "Classes in one line": false,
+      "Keep nested namespaces in one line": false
+    },
+    "Braces placement":
+    {
+      "In classes": "End of line",
+      "In namespaces": "End of line",
+      "In functions": "End of line",
+      "In lambdas": "End of line",
+      "Other": "End of line"
+    },
+    "Base class list":
+    {
+      "Align when multiline": true,
+      ", on next line": false,
+      "Place : on next line": "If long",
+      "New line after :": "Never"
+    },
+    "Constructor initialization list":
+    {
+      "Align when multiline": true,
+      ", on next line": false,
+      "Place : on next line": "If long",
+      "New line after :": "Never"
+    },
+    "Chained method calls":
+    {
+      "Align when multiline": false
+    },
+    "After functions in return type":
+    {
+      "In global and namespace scopes": "Wrap if long",
+      "In class scope": "Wrap if long"
+    },
+    "Function declaration parameters":
+    {
+      "Align when multiline": true,
+      ", on next line": false,
+      "New line after (": false,
+      "Place ) in new line": false,
+      "Align multiline parentheses": false
+    },
+    "Function call arguments":
+    {
+      "Align when multiline": true,
+      ", on next line": false,
+      "New line after (": false,
+      "Place ) in new line": false,
+      "Align multiline parentheses": false
+    },
+    "Lambda capture list":
+    {
+      "Align when multiline": false,
+      ", on next line": false,
+      "New line after [": false,
+      "Place ] in new line": false,
+      "Align multiline brackets": false
+    },
+    "Template class declaration":
+    {
+      "Indent template body if wrapped": false
+    },
+    "Template function declaration":
+    {
+      "Indent template body if wrapped": false
+    },
+    "Template declaration parameters":
+    {
+      "Align when multiline": false,
+      ", on next line": false,
+      "New line after <": false,
+      "Place > in new line": false,
+      "Align multiline <>": false
+    },
+    "Template instantiation parameters":
+    {
+      "Align when multiline": false,
+      ", on next line": false,
+      "New line after <": false,
+      "Place > in new line": false,
+      "Align multiline <>": false
+    },
+    "if statement":
+    {
+      "Force braces": "Do not force",
+      "else in new line": false,
+      "Special else if treatment": true
+    },
+    "for statement":
+    {
+      "Align when multiline": true,
+      "New line after (": false,
+      "Place ) in new line": false,
+      "Force braces": "Do not force"
+    },
+    "while statement":
+    {
+      "Force braces": "Do not force"
+    },
+    "do while statement":
+    {
+      "Force braces": "Do not force",
+      "while on lew line": false
+    },
+    "switch statement":
+    {
+      "Indent case branches": true,
+      "Keep simple cases in one line": false
+    },
+    "try statement":
+    {
+      "catch on new line": false
+    },
+    "<< >> operators":
+    {
+      "Align when multiline": true
+    },
+    "Binary expressions":
+    {
+      "Align when multiline": true,
+      "Operation sign on next line": false,
+      "New line after (": false,
+      "Place ) in new line": false
+    },
+    "Assignment statement":
+    {
+      "Align when multiline": true,
+      "Assignment sign on next line": false
+    },
+    "Variable groups":
+    {
+      "Align in columns": false
+    },
+    "Ternary operation":
+    {
+      "Align when multiline": true,
+      "? and : on next line": true,
+      "Non-breaking ?:": true
+    },
+    "Initializer lists":
+    {
+      "Align when multiline": true,
+      ", on next line": false,
+      "Align initializer list values in columns": true,
+      "New line after {": false,
+      "Place } in new line": false
+    },
+    "Enum constants":
+    {
+      ", on next line": false
+    }
+  },
+  "Blank Lines":
+  {
+    "Keep Maximum Blank Lines":
+    {
+      "In declarations": 2,
+      "In code": 2,
+      "Before }": 2
+    },
+    "Minimum Blank Lines":
+    {
+      "Before includes": 1,
+      "After includes": 1,
+      "Around class": 1,
+      "After class header": 0,
+      "Around field": 0,
+      "Around global variable": 0,
+      "Around function declaration": 1,
+      "Around function definition": 1,
+      "Before function body": 0
+    }
+  }
+}
