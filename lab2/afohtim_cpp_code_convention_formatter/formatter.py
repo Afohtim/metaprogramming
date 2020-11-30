@@ -3,13 +3,26 @@ from afohtim_cpp_code_convention_formatter import lexer
 import sys, os, re
 import enum
 
+
 class IdType(enum.Enum):
-    Class = enum.auto
-    Struct = enum.auto
-    Function = enum.auto
-    ClassField = enum.auto
-    StructField = enum.auto
-    Variable = enum.auto
+    Type = enum.auto()
+    Variable = enum.auto()
+    ClassMember = enum.auto()
+    StructMember = enum.auto()
+    Constant = enum.auto()
+    Function = enum.auto()
+    Namespace = enum.auto()
+    Enum = enum.auto()
+    EnumMember = enum.auto()
+    Macro = enum.auto()
+    Ignored = enum.auto()
+
+
+class ScopeType(enum.Enum):
+    Normal = enum.auto()
+    Class = enum.auto()
+    Struct = enum.auto()
+    Enum = enum.auto()
 
 
 class CodeConvectionFormatter:
@@ -36,8 +49,10 @@ class CodeConvectionFormatter:
             return camel_separation
 
     @classmethod
-    def to_snake_case(cls, token, class_field=False):
+    def to_snake_case(cls, token, class_field=False, macro=False):
         separated_content = cls.separate_string(token.content())
+        if macro:
+            separated_content = [i.upper() for i in separated_content]
         new_token_content = str()
         for i in range(len(separated_content)):
             new_token_content += separated_content[i]
@@ -46,13 +61,16 @@ class CodeConvectionFormatter:
         return lexer.Token(new_token_content, lexer.TokenType.identifier)
 
     @classmethod
-    def to_camel_case(cls, token, pascal_case=False):
+    def to_camel_case(cls, token, pascal_case=False, constant=False):
         separated_content = cls.separate_string(token.content())
         new_token_content = separated_content[0]
         if pascal_case:
             new_token_content = list(new_token_content)
             new_token_content[0] = new_token_content[0].upper()
             new_token_content = ''.join(new_token_content)
+        if constant:
+            if separated_content[0] != 'k':
+                separated_content = ['k'] + separated_content
         for s in separated_content[1:]:
             s = list(s)
             s[0] = s[0].upper()
@@ -86,6 +104,90 @@ class CodeConvectionFormatter:
             if included[0] == '"':
                 return included[1:-1]
 
+    def format_scope(self, tokens, i, current_scope, variable_dictionary):
+        formatted_tokens = []
+        local_variable_dictionary = variable_dictionary # {'class_names': [], 'struct_names': [], 'enum_names': []}
+        next_is_const = False
+        next_is_class = False
+        next_is_struct = False
+        next_is_enum = False
+        next_is_namespace = False
+        while tokens[i].content() != '}':
+            content = tokens[i].content()
+            if tokens[i].type == lexer.TokenType.identifier:
+                is_function = self.check_if_function(tokens, i)
+                is_called = self.check_if_called(tokens, i)
+                is_type = content in local_variable_dictionary['class_names']+local_variable_dictionary['struct_names']
+                is_enum = content in local_variable_dictionary['enum_names']
+                is_macro = content in local_variable_dictionary['macro_names']
+                is_namespace = content in local_variable_dictionary['namespace_names']
+                token_type = None
+                if is_type:
+                    token_type = IdType.Type
+                elif is_enum:
+                    token_type = IdType.Enum
+                elif is_macro:
+                    token_type = IdType.Macro
+                elif is_namespace:
+                    token_type = IdType.Namespace
+                elif is_function:
+                    token_type = IdType.Function
+                else:
+                    if next_is_const:
+                        token_type = IdType.Constant
+                        next_is_const = False
+                    elif next_is_enum:
+                        token_type = IdType.Enum
+                    elif next_is_class:
+                        token_type = IdType.Type
+                    elif next_is_struct:
+                        token_type = IdType.Type
+                    elif next_is_namespace:
+                        token_type = IdType.Namespace
+                    elif current_scope == ScopeType.Enum:
+                        token_type = IdType.EnumMember
+                    elif current_scope == ScopeType.Struct:
+                        token_type = IdType.StructMember
+                    elif current_scope == ScopeType.Class:
+                        token_type = IdType.ClassMember
+                    else:
+                        if is_called:
+                            previous_id = self.get_previous_id(tokens, i)
+                            if previous_id in local_variable_dictionary['class_instances']:
+                                token_type = IdType.ClassMember
+                            elif previous_id in local_variable_dictionary['struct_instances']:
+                                token_type = IdType.StructMember
+                            elif previous_id in local_variable_dictionary['enum_instances']:
+                                token_type = IdType.EnumMember
+                            else:
+                                if current_scope == 'class':
+                                    token_type = IdType.ClassMember
+                                elif current_scope == 'struct':
+                                    token_type = IdType.StructMember
+                                elif token_type == 'enum':
+                                    token_type = IdType.EnumMember
+                                else:
+                                    token_type = IdType.Ignored
+                        else:
+                            token_type = IdType.Variable
+                formatted_tokens.append(self.format_identifier(tokens[i], token_type))
+            else:
+                if content == 'const':
+                    next_is_const = True
+                elif content == 'class':
+                    next_is_class = True
+                elif content == 'struct':
+                    next_is_struct = True
+                elif content == 'enum':
+                    next_is_enum = True
+                elif content == 'namespace':
+                    next_is_namespace = True
+                elif content == '{':
+                    # TODO recursive scope format call
+                    pass
+                formatted_tokens.append(tokens[i])
+            i += 1
+
     def format_file(self, file_path, format_file=False):
         with open(file_path, 'r') as file_reader:
             file = file_reader.read()
@@ -107,12 +209,18 @@ class CodeConvectionFormatter:
             elif token.content() == 'class':
                 while tokens[i].content() != '{':
                     if tokens[i].type() == lexer.TokenType.identifier:
-                        formatted_tokens.append(self.format_identifier(token), )
+                        formatted_tokens.append(self.format_identifier(token, IdType.Class))
                     i += 1
             elif token.content() == 'struct':
-                pass
+                while tokens[i].content() != '{':
+                    if tokens[i].type() == lexer.TokenType.identifier:
+                        formatted_tokens.append(self.format_identifier(token, IdType.Struct))
+                    i += 1
             elif token.content() == 'namespace':
-                pass
+                while tokens[i].content() != ';':
+                    if tokens[i].type() == lexer.TokenType.identifier:
+                        formatted_tokens.append(self.format_identifier(token, IdType.Variable))
+                    i += 1
             elif token.content() == 'using':
                 formatted_tokens.append(token)
 
