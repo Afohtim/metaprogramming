@@ -61,7 +61,7 @@ class CodeConvectionFormatter:
 
     @classmethod
     def to_camel_case(cls, token, pascal_case=False, constant=False):
-        separated_content = cls.separate_string(token.content())
+        separated_content = [x for x in cls.separate_string(token.content()) if x != '']
         new_token_content = separated_content[0]
         if pascal_case:
             new_token_content = list(new_token_content)
@@ -129,21 +129,32 @@ class CodeConvectionFormatter:
         local_variable_dictionary = variable_dictionary.copy()
         next_is_const = False
         next_is_class = False
+        next_class_name = str()
         next_is_struct = False
         next_is_enum = False
         next_is_namespace = False
+        next_is_class_member = False
         while i < len(tokens) and tokens[i].content() != '}':
             content = tokens[i].content()
             if tokens[i].type() == lexer.TokenType.identifier:
                 is_function = self.check_if_function(tokens, i)
                 is_called = self.check_if_called(tokens, i)
-                is_type = content in local_variable_dictionary['class'] or \
-                    content in local_variable_dictionary['struct']
-                is_enum = content in local_variable_dictionary['enum']
-                is_macro = content in local_variable_dictionary['macro']
-                is_namespace = content in local_variable_dictionary['namespace']
+                is_class = content in local_variable_dictionary['class']['names']
+                is_struct = content in local_variable_dictionary['struct']['names']
+                is_enum = content in local_variable_dictionary['enum']['names']
+                is_macro = content in local_variable_dictionary['macro']['names']
+                is_namespace = content in local_variable_dictionary['namespace']['names']
                 token_type = None
-                if is_type:
+
+                if next_is_class_member:
+                    local_variable_dictionary['class']['variables'].append(content)
+                    next_is_class_member = False
+
+                if is_class:
+                    token_type = IdType.Type
+                    if not is_function:
+                        next_is_class_member = True
+                elif is_struct:
                     token_type = IdType.Type
                 elif is_enum:
                     token_type = IdType.Enum
@@ -159,16 +170,18 @@ class CodeConvectionFormatter:
                         next_is_const = False
                     elif next_is_enum:
                         token_type = IdType.Enum
-                        local_variable_dictionary['enum'][content] = list()
+                        local_variable_dictionary['enum']['names'].append(content)
                     elif next_is_class:
                         token_type = IdType.Type
-                        local_variable_dictionary['class'][content] = list()
+                        next_class_name = content
+                        local_variable_dictionary['class']['names'].append(content)
                     elif next_is_struct:
                         token_type = IdType.Type
-                        local_variable_dictionary['struct'][content] = list()
+                        local_variable_dictionary['struct']['names'].append(content)
                     elif next_is_namespace:
                         token_type = IdType.Namespace
-                        local_variable_dictionary['namespace'][content] = list()
+                        local_variable_dictionary['namespace']['names'].append(content)
+                        next_is_namespace = False
                     elif current_scope == ScopeType.Enum:
                         token_type = IdType.EnumMember
                     elif current_scope == ScopeType.Struct:
@@ -177,12 +190,13 @@ class CodeConvectionFormatter:
                         token_type = IdType.ClassMember
                     else:
                         if is_called:
-                            previous_id = self.get_previous_id(tokens, i)
-                            if previous_id in local_variable_dictionary['class']:
+                            previous_id = self.get_previous_id(tokens, i).content()
+                            if previous_id in local_variable_dictionary['class']['names']\
+                                    or previous_id in local_variable_dictionary['class']['variables']:
                                 token_type = IdType.ClassMember
-                            elif previous_id in local_variable_dictionary['struct']:
+                            elif previous_id in local_variable_dictionary['struct']['names']:
                                 token_type = IdType.StructMember
-                            elif previous_id in local_variable_dictionary['enum']:
+                            elif previous_id in local_variable_dictionary['enum']['names']:
                                 token_type = IdType.EnumMember
                             else:
                                 token_type = IdType.Ignored
@@ -209,14 +223,21 @@ class CodeConvectionFormatter:
                     next_is_namespace = True
                 elif content == '{':
 
-                    next_scope = {'type': 'block'}
+                    next_scope = {'type': 'block', 'name': current_scope['name']}
 
                     if next_is_struct:
                         next_scope['type'] = 'struct'
+                        next_is_struct = False
                     elif next_is_class:
                         next_scope['type'] = 'class'
+                        next_scope['name'] = next_class_name
+                        next_is_class = False
                     elif next_is_enum:
                         next_scope['type'] = 'enum'
+                        next_is_enum = False
+
+                    if current_scope['type'] == 'class' and next_scope['type'] == 'block':
+                        next_scope['type'] = 'class'
                     formatted_tokens.append(tokens[i])
                     i, formatted_scope = self.format_scope(tokens, i+1, next_scope, variable_dictionary)
                     formatted_tokens += formatted_scope
@@ -228,8 +249,10 @@ class CodeConvectionFormatter:
         with open(file_path, 'r') as file_reader:
             file = file_reader.read()
         tokens = lexer.lex(file)
-        current_scope = {'type': 'file'}
-        variable_dictionary = {'class': dict(), 'struct': dict(), 'enum': dict(), 'macro': list(), 'namespace': list()}
+        current_scope = {'type': 'file', 'name': file_path}
+        empty_config = {'names': [], 'variables': []}
+        variable_dictionary = {'class': empty_config, 'struct': empty_config, 'enum': empty_config,
+                               'macro': empty_config, 'namespace': empty_config, 'file_name': file_path}
 
         i, formatted_tokens = self.format_scope(tokens, 0, current_scope, variable_dictionary)
 
