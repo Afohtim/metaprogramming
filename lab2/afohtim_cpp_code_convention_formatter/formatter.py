@@ -1,6 +1,7 @@
 from afohtim_cpp_code_convention_formatter import lexer
 import sys, os, re
 import enum
+import copy
 
 
 class IdType(enum.Enum):
@@ -126,7 +127,7 @@ class CodeConvectionFormatter:
 
     def format_scope(self, tokens, i, current_scope, variable_dictionary):
         formatted_tokens = []
-        local_variable_dictionary = variable_dictionary.copy()
+        local_variable_dictionary = copy.deepcopy(variable_dictionary)
         next_is_const = False
         next_is_class = False
         next_class_name = str()
@@ -239,7 +240,7 @@ class CodeConvectionFormatter:
                     if current_scope['type'] == 'class' and next_scope['type'] == 'block':
                         next_scope['type'] = 'class'
                     formatted_tokens.append(tokens[i])
-                    i, formatted_scope = self.format_scope(tokens, i+1, next_scope, variable_dictionary)
+                    i, formatted_scope = self.format_scope(tokens, i+1, next_scope, local_variable_dictionary)
                     formatted_tokens += formatted_scope
                 formatted_tokens.append(tokens[i])
             i += 1
@@ -251,9 +252,12 @@ class CodeConvectionFormatter:
         tokens = lexer.lex(file)
         current_scope = {'type': 'file', 'name': file_path}
         empty_config = {'names': [], 'variables': []}
-        variable_dictionary = {'class': empty_config, 'struct': empty_config, 'enum': empty_config,
-                               'macro': empty_config, 'namespace': empty_config, 'file_name': file_path}
-
+        variable_dictionary = {'class': copy.deepcopy(empty_config),
+                               'struct': copy.deepcopy(empty_config),
+                               'enum': copy.deepcopy(empty_config),
+                               'macro': copy.deepcopy(empty_config),
+                               'namespace': copy.deepcopy(empty_config),
+                               'file_name': file_path}
         i, formatted_tokens = self.format_scope(tokens, 0, current_scope, variable_dictionary)
 
         if format_file:
