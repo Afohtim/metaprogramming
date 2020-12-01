@@ -187,7 +187,7 @@ def lex(code):
                         #     while j < len(code) - 1 and (is_possible(code[j])):
                         #         identifier += code[j]
                         #         j += 1
-                        # token_list.append(Token(identifier, TokenType.identifier, line, i - line_start))
+                        token_list.append(Token(identifier, TokenType.identifier, line, i - line_start))
                 i = j - 1
             i += 1
         except Exception as e:
