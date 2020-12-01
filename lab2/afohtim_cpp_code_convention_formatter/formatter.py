@@ -1,5 +1,4 @@
 from afohtim_cpp_code_convention_formatter import lexer
-#import lexer
 import sys, os, re
 import enum
 
@@ -92,7 +91,10 @@ class CodeConvectionFormatter:
         return token
 
     def format_preprocessor_directive(self, token):
-        return token
+        if token.content().endswith('.cpp'):
+            token.set_content(token.content()[:-4] + '.cc')
+        elif token.content().endswith('.hpp'):
+            token.set_content(token.content()[:-4] + '.h')
 
     def get_included_file(self, preprocessor_directive):
         if preprocessor_directive.content().startswith('#include'):
@@ -104,9 +106,27 @@ class CodeConvectionFormatter:
             if included[0] == '"':
                 return included[1:-1]
 
+    def check_if_function(self, tokens, i):
+        i += 1
+        while tokens[i].type() == lexer.TokenType.whitespace:
+            i += 1
+        if tokens[i].content() == '(':
+            return True
+        else:
+            return False
+
+    def check_if_called(self, tokens, i):
+        return tokens[i - 1].content() == '.'
+
+    def get_previous_id(self, tokens, i):
+        i -= 1
+        while tokens[i].type() != lexer.TokenType.identifier:
+            i -= 1
+        return tokens[i]
+
     def format_scope(self, tokens, i, current_scope, variable_dictionary):
         formatted_tokens = []
-        local_variable_dictionary = variable_dictionary # {'class_names': [], 'struct_names': [], 'enum_names': []}
+        local_variable_dictionary = variable_dictionary.copy()
         next_is_const = False
         next_is_class = False
         next_is_struct = False
@@ -117,10 +137,11 @@ class CodeConvectionFormatter:
             if tokens[i].type == lexer.TokenType.identifier:
                 is_function = self.check_if_function(tokens, i)
                 is_called = self.check_if_called(tokens, i)
-                is_type = content in local_variable_dictionary['class_names']+local_variable_dictionary['struct_names']
-                is_enum = content in local_variable_dictionary['enum_names']
-                is_macro = content in local_variable_dictionary['macro_names']
-                is_namespace = content in local_variable_dictionary['namespace_names']
+                is_type = content in local_variable_dictionary['class'] or \
+                    content in local_variable_dictionary['struct']
+                is_enum = content in local_variable_dictionary['enum']
+                is_macro = content in local_variable_dictionary['macro']
+                is_namespace = content in local_variable_dictionary['namespace']
                 token_type = None
                 if is_type:
                     token_type = IdType.Type
@@ -138,12 +159,16 @@ class CodeConvectionFormatter:
                         next_is_const = False
                     elif next_is_enum:
                         token_type = IdType.Enum
+                        local_variable_dictionary['enum'][content] = list()
                     elif next_is_class:
                         token_type = IdType.Type
+                        local_variable_dictionary['class'][content] = list()
                     elif next_is_struct:
                         token_type = IdType.Type
+                        local_variable_dictionary['struct_names'][content] = list()
                     elif next_is_namespace:
                         token_type = IdType.Namespace
+                        local_variable_dictionary['namespace_names'][content] = list()
                     elif current_scope == ScopeType.Enum:
                         token_type = IdType.EnumMember
                     elif current_scope == ScopeType.Struct:
@@ -153,23 +178,23 @@ class CodeConvectionFormatter:
                     else:
                         if is_called:
                             previous_id = self.get_previous_id(tokens, i)
-                            if previous_id in local_variable_dictionary['class_instances']:
+                            if previous_id in local_variable_dictionary['class']:
                                 token_type = IdType.ClassMember
-                            elif previous_id in local_variable_dictionary['struct_instances']:
+                            elif previous_id in local_variable_dictionary['struct']:
                                 token_type = IdType.StructMember
-                            elif previous_id in local_variable_dictionary['enum_instances']:
+                            elif previous_id in local_variable_dictionary['enum']:
                                 token_type = IdType.EnumMember
                             else:
-                                if current_scope == 'class':
-                                    token_type = IdType.ClassMember
-                                elif current_scope == 'struct':
-                                    token_type = IdType.StructMember
-                                elif token_type == 'enum':
-                                    token_type = IdType.EnumMember
-                                else:
-                                    token_type = IdType.Ignored
+                                token_type = IdType.Ignored
                         else:
-                            token_type = IdType.Variable
+                            if current_scope['type'] == 'class':
+                                token_type = IdType.ClassMember
+                            elif current_scope['type'] == 'struct':
+                                token_type = IdType.StructMember
+                            elif token_type['type'] == 'enum':
+                                token_type = IdType.EnumMember
+                            else:
+                                token_type = IdType.Variable
                 formatted_tokens.append(self.format_identifier(tokens[i], token_type))
             else:
                 if content == 'const':
@@ -183,54 +208,36 @@ class CodeConvectionFormatter:
                 elif content == 'namespace':
                     next_is_namespace = True
                 elif content == '{':
-                    # TODO recursive scope format call
-                    pass
-                formatted_tokens.append(tokens[i])
+
+                    next_scope = {'type': 'block'}
+
+                    if next_is_struct:
+                        next_scope['type'] = 'struct'
+                    elif next_is_class:
+                        next_scope['type'] = 'class'
+                    elif next_is_enum:
+                        next_scope['type'] = 'enum'
+
+                    self.format_scope(tokens, i+1, next_scope, variable_dictionary)
+                else:
+                    formatted_tokens.append(tokens[i])
             i += 1
+        return formatted_tokens
 
     def format_file(self, file_path, format_file=False):
         with open(file_path, 'r') as file_reader:
             file = file_reader.read()
         tokens = lexer.lex(file)
+        current_scope = {'type': 'file'}
+        variable_dictionary = {'class': dict(), 'struct': dict(), 'enum': dict()}
 
-        formatted_tokens = []
+        formatted_tokens = self.format_scope(tokens, 0, current_scope, variable_dictionary)
 
-        name_dictionary = {}
-        i = 0
-        while i < len(tokens):
-            token = tokens[i]
-            if token.type() == lexer.TokenType.identifier:
-                formatted_tokens.append(self.format_identifier(token))
-            elif token.type() == lexer.TokenType.preprocessor_directive:
-                formatted_tokens.append(self.format_preprocessor_directive(token))
-                included = self.get_included_file(token)
-                if included is not None:
-                    name_dictionary += self.name_dictionary[os.path.normpath(os.path.join(file_path, '..', included))]
-            elif token.content() == 'class':
-                while tokens[i].content() != '{':
-                    if tokens[i].type() == lexer.TokenType.identifier:
-                        formatted_tokens.append(self.format_identifier(token, IdType.Class))
-                    i += 1
-            elif token.content() == 'struct':
-                while tokens[i].content() != '{':
-                    if tokens[i].type() == lexer.TokenType.identifier:
-                        formatted_tokens.append(self.format_identifier(token, IdType.Struct))
-                    i += 1
-            elif token.content() == 'namespace':
-                while tokens[i].content() != ';':
-                    if tokens[i].type() == lexer.TokenType.identifier:
-                        formatted_tokens.append(self.format_identifier(token, IdType.Variable))
-                    i += 1
-            elif token.content() == 'using':
-                formatted_tokens.append(token)
-
-            else:
-                formatted_tokens.append(token)
         if format_file:
             with open(file_path, 'w') as file_writer:
                 for token in formatted_tokens:
                     file_writer.write(token.content())
-        i += 1
+        return variable_dictionary
 
     @classmethod
     def is_cpp_file(cls, file_name):
@@ -248,7 +255,8 @@ class CodeConvectionFormatter:
     def get_all_files(self, project_path):
         listdir = os.listdir(project_path)
         files = [{'path': project_path, 'name': x} for x in listdir if self.is_cpp_file(x)]
-        directories = [os.path.normpath(os.path.join(project_path, x)) for x in listdir if os.path.isdir(os.path.join(project_path, x))]
+        directories = [os.path.normpath(os.path.join(project_path, x)) for x in listdir if
+                       os.path.isdir(os.path.join(project_path, x))]
         for directory in directories:
             files += self.get_all_files(directory)
 
@@ -280,7 +288,6 @@ class CodeConvectionFormatter:
                 referenced[os.path.normpath(os.path.join(file['path'], dependency))] = file_path
         return referenced, referencing
 
-
     def format_project(self, project_path, format_files=False):
         referenced, referencing = self.build_tree(project_path)
 
@@ -296,7 +303,5 @@ class CodeConvectionFormatter:
             file_format_queue = file_format_queue[1:]
 
 
-
-
-
-
+formatter = CodeConvectionFormatter()
+formatter.format_file('./main.cpp')

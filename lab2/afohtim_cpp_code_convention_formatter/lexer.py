@@ -52,6 +52,8 @@ class Token:
         return self.__token_string in ["auto", "bool", "char", "char8_t", "char16_t", "char32_t", "double", "float",
                                        "int", "long", "void"]
 
+    def set_content(self, content):
+        self.__token_string = content
 
 separators = ['{', '}', '(', ')', ';', ',']
 operators = {'!': {'!', '!='}, '~': {'~'}, '+': {'+', '++', '+='}, '-': {'-', '--', '-=', '->', '->*'},
@@ -178,13 +180,14 @@ def lex(code):
                                     j += 1
                         token_list.append(Token(identifier, TokenType.numeric, line, i - line_start))
                     else:
-                        if code[j] == ':' and code[j+1] == ':':
-                            identifier += '::'
-                            j += 2
-                            while j < len(code) - 1 and (is_possible(code[j])):
-                                identifier += code[j]
-                                j += 1
-                        token_list.append(Token(identifier, TokenType.identifier, line, i - line_start))
+                        pass
+                        # if code[j] == ':' and code[j+1] == ':':
+                        #     identifier += '::'
+                        #     j += 2
+                        #     while j < len(code) - 1 and (is_possible(code[j])):
+                        #         identifier += code[j]
+                        #         j += 1
+                        # token_list.append(Token(identifier, TokenType.identifier, line, i - line_start))
                 i = j - 1
             i += 1
         except Exception as e:
