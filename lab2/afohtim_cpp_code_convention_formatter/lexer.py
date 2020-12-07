@@ -20,6 +20,7 @@ class Token:
         self.__token_type = token_type
         self.__line = line
         self.__symbol_pos = symbol_pos
+        self.__error_message = str()
 
     def type(self):
         return self.__token_type
@@ -54,6 +55,12 @@ class Token:
 
     def set_content(self, content):
         self.__token_string = content
+
+    def set_error_message(self, error_message):
+        self.__error_message = error_message
+
+    def get_error_message(self):
+        return self.__error_message
 
 separators = ['{', '}', '(', ')', ';', ',']
 operators = {'!': {'!', '!='}, '~': {'~'}, '+': {'+', '++', '+='}, '-': {'-', '--', '-=', '->', '->*'},

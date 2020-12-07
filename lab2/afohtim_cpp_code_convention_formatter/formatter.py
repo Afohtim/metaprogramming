@@ -84,18 +84,27 @@ class CodeConvectionFormatter:
 
     def format_identifier(self, token, id_type=IdType.Variable):
         if id_type == IdType.Type or id_type == IdType.Enum:
+            token.set_error_message('type names should be pascal case')
             return self.to_camel_case(token, pascal_case=True)
         elif id_type == IdType.ClassMember:
+            token.set_error_message('class members should be snake case with underscore in the end')
             return self.to_snake_case(token, class_field=True)
         elif id_type == IdType.StructMember:
+            token.set_error_message('struct members should be snake case')
             return self.to_snake_case(token)
         elif id_type == IdType.Function:
+            token.set_error_message('functions should be pascal case')
             return self.to_camel_case(token, pascal_case=True)
         elif id_type == IdType.Variable:
+            token.set_error_message('variables should be snake case')
             return self.to_snake_case(token)
         elif id_type == IdType.Main:
             return self.to_camel_case(token)
-        elif id_type == IdType.EnumMember or id_type == IdType.Constant:
+        elif id_type == IdType.EnumMember:
+            token.set_error_message('enum members should be pascal case with k in the beginning')
+            return self.to_camel_case(token, constant=True)
+        elif id_type == IdType.Constant:
+            token.set_error_message('constants should be pascal case with k in the beginning')
             return self.to_camel_case(token, constant=True)
         return token
 
@@ -244,7 +253,7 @@ class CodeConvectionFormatter:
                         included = self.get_included_file(tokens[i])
                         if included:
                             file_path = os.path.normpath(os.path.join(current_scope['name'], '..', included))
-                            var_d, class_m = self.format_file(file_path)
+                            var_d, class_m = self.format_file(file_path, in_file_call=True)
                             local_variable_dictionary.update(var_d)
                             class_members.update(class_m)
                             self.format_preprocessor_directive(tokens[i])
@@ -288,7 +297,7 @@ class CodeConvectionFormatter:
             i += 1
         return i, formatted_tokens, local_variable_dictionary, class_members
 
-    def format_file(self, file_path, format_file=False, project_formatting=False):
+    def format_file(self, file_path, format_file=False, project_formatting=False, in_file_call=False):
         with open(file_path, 'r') as file_reader:
             file = file_reader.read()
         tokens = lexer.lex(file)
@@ -302,6 +311,20 @@ class CodeConvectionFormatter:
                                'file_name': file_path}
         class_members = dict()
         i, formatted_tokens, variable_dictionary, class_members = self.format_scope(tokens, 0, current_scope, variable_dictionary, class_members)
+        if not in_file_call:
+            error_id = 1
+            with open(file_path+'_verification.log', 'w') as log_writer:
+                if file_path != self.normalize_name(file_path):
+                    log_writer.write('{id}. {path}: wrong file extension\n'.format(id=error_id, path=file_path))
+                    error_id += 1
+                for i in range(len(tokens)):
+                    if tokens[i].content() != formatted_tokens[i].content():
+                        error_message = '{id}. {path}: line {line} - {content}: {error_message}\n'.format(
+                            id=error_id, path=file_path, line = tokens[i].line(), content=tokens[i].content(),
+                            error_message=tokens[i].get_error_message()
+                        )
+                        log_writer.write(error_message)
+                        error_id += 1
         if format_file:
             if project_formatting:
                 self.files[file_path] = str()
@@ -311,6 +334,8 @@ class CodeConvectionFormatter:
                 with open(file_path, 'w') as file_writer:
                     for token in formatted_tokens:
                         file_writer.write(token.content())
+                os.rename(file_path, self.normalize_name(file_path))
+
         return variable_dictionary, class_members
 
     @classmethod
@@ -378,5 +403,6 @@ class CodeConvectionFormatter:
         for file, content in self.files.items():
             with open(file, 'w') as writer:
                 writer.write(content)
-        for file in files:
-            os.rename(os.path.normpath(os.path.join(file['path'], file['name'])), os.path.normpath(os.path.join(file['path'], self.normalize_name(file['name']))))
+        if format_files:
+            for file in files:
+                os.rename(os.path.normpath(os.path.join(file['path'], file['name'])), os.path.normpath(os.path.join(file['path'], self.normalize_name(file['name']))))

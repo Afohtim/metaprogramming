@@ -24,7 +24,7 @@ def main():
             if sys.argv[2] == '-d':
                 formatter.format_project(sys.argv[3], format_files, only_folder=True)
             if sys.argv[2] == '-f':
-                formatter.format_file(sys.argv[3],format_files)
+                formatter.format_file(sys.argv[3], format_files)
     except Exception:
         print('wrong usage. use -help')
 

@@ -8,7 +8,7 @@ classifiers = [
 
 setup(
     name="afohtim_cpp_code_convention_formatter",
-    version="0.0.1",
+    version="0.0.2",
     author="Afohtim",
     author_email="afohmouth@gmail.com",
     description="uni metaprogramming lab 2",
