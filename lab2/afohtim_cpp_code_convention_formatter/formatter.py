@@ -40,6 +40,8 @@ class CodeConvectionFormatter:
             while len(snake_separation[-1]) == 0:
                 snake_separation = snake_separation[:-1]
             return snake_separation
+        elif content.upper() == content:
+            return [content.lower()]
         else:
             camel_separation = []
             name_part = str()
@@ -148,13 +150,16 @@ class CodeConvectionFormatter:
         next_is_const = False
         next_is_class = False
         next_class_name = str()
+
         next_is_struct = False
         next_is_enum = False
         next_is_namespace = False
         next_is_class_member = False
         class_method = False
         prev_class_name = None
-        is_main = False
+        next_is_tempalte = False
+        template_count = 0
+        template_typenames = list()
         while i < len(tokens) and tokens[i].content() != '}':
             content = tokens[i].content()
             if tokens[i].type() == lexer.TokenType.identifier:
@@ -203,12 +208,18 @@ class CodeConvectionFormatter:
                         local_variable_dictionary['enum']['names'].append(content)
                     elif next_is_class:
                         token_type = IdType.Type
-                        next_class_name = content
-                        class_members[content] = set()
-                        local_variable_dictionary['class']['names'].append(content)
+                        if template_count > 0:
+                            template_typenames.append(content)
+                        else:
+                            next_class_name = content
+                            class_members[content] = set()
+                            local_variable_dictionary['class']['names'].append(content)
                     elif next_is_struct:
                         token_type = IdType.Type
-                        local_variable_dictionary['struct']['names'].append(content)
+                        if template_count > 0:
+                            template_typenames.append(content)
+                        else:
+                            local_variable_dictionary['struct']['names'].append(content)
                     elif next_is_namespace:
                         token_type = IdType.Namespace
                         local_variable_dictionary['namespace']['names'].append(content)
@@ -260,7 +271,7 @@ class CodeConvectionFormatter:
 
                 if content == 'const':
                     next_is_const = True
-                elif content == 'class':
+                elif content == 'class' or content == 'typename':
                     next_is_class = True
                 elif content == 'struct':
                     next_is_struct = True
@@ -268,6 +279,13 @@ class CodeConvectionFormatter:
                     next_is_enum = True
                 elif content == 'namespace':
                     next_is_namespace = True
+                elif content == 'template':
+                    template_count += 1
+                    next_is_tempalte = True
+                elif tokens[i].is_type() and template_count > 0:
+                    next_is_class = True
+                elif content == '>' and template_count > 0:
+                    template_count -= 1
                 elif content == '{':
 
                     next_scope = {'type': 'block', 'name': current_scope['name']}
@@ -287,10 +305,16 @@ class CodeConvectionFormatter:
                         next_scope['type'] = 'class method'
                         next_scope['name'] = prev_class_name
 
+                    next_variable_dictionary = copy.deepcopy(local_variable_dictionary)
+                    if next_is_tempalte:
+                        for typename in template_typenames:
+                            next_variable_dictionary['class']['names'].append(typename)
+                            next_is_tempalte = False
+
                     if current_scope['type'] == 'class' and next_scope['type'] == 'block':
-                        next_scope['type'] = 'class'
+                        next_scope['type'] = 'class method'
                     formatted_tokens.append(tokens[i])
-                    i, formatted_scope, q, w = self.format_scope(tokens, i + 1, next_scope, local_variable_dictionary,
+                    i, formatted_scope, q, w = self.format_scope(tokens, i + 1, next_scope, next_variable_dictionary,
                                                            class_members)
                     formatted_tokens += formatted_scope
                 formatted_tokens.append(tokens[i])
