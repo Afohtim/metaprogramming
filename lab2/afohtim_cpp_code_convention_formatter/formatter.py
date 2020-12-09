@@ -154,7 +154,8 @@ class CodeConvectionFormatter:
         next_is_struct = False
         next_is_enum = False
         next_is_namespace = False
-        next_is_class_member = False
+        next_is_class_instance = False
+        next_is_ignored = False
         class_method = False
         prev_class_name = None
         next_is_tempalte = False
@@ -172,14 +173,16 @@ class CodeConvectionFormatter:
                 is_namespace = content in local_variable_dictionary['namespace']['names']
                 token_type = None
 
-                if next_is_class_member and not is_function:
+                if next_is_class_instance and not is_function:
                     local_variable_dictionary['class']['variables'].append(content)
-                    next_is_class_member = False
+                    next_is_class_instance = False
 
-                if is_class:
+                if next_is_ignored:
+                    pass
+                elif is_class:
                     token_type = IdType.Type
                     if not is_function:
-                        next_is_class_member = True
+                        next_is_class_instance = True
                         prev_class_name = content
                         if content not in class_members:
                             class_members[content] = set()
@@ -192,8 +195,8 @@ class CodeConvectionFormatter:
                 elif is_namespace:
                     token_type = IdType.Namespace
                 elif is_function:
-                    if next_is_class_member:
-                        next_is_class_member = False
+                    if next_is_class_instance:
+                        next_is_class_instance = False
                         class_method = True
                     if content == 'main':
                         token_type = IdType.Main
@@ -286,6 +289,8 @@ class CodeConvectionFormatter:
                     next_is_class = True
                 elif content == '>' and template_count > 0:
                     template_count -= 1
+                elif content == '::' and not next_is_class_instance:
+                    next_is_ignored = True
                 elif content == '{':
 
                     next_scope = {'type': 'block', 'name': current_scope['name']}
