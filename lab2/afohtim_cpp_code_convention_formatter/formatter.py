@@ -63,7 +63,7 @@ class CodeConvectionFormatter:
             new_token_content += separated_content[i]
             if i < len(separated_content) - 1 or (class_field and separated_content[i] != '_'):
                 new_token_content += '_'
-        return lexer.Token(new_token_content, lexer.TokenType.identifier)
+        return lexer.Token(new_token_content, lexer.TokenType.identifier, token.line(), token.column())
 
     @classmethod
     def to_camel_case(cls, token, pascal_case=False, constant=False):
@@ -82,7 +82,20 @@ class CodeConvectionFormatter:
             s[0] = s[0].upper()
             s = ''.join(s)
             new_token_content += s
-        return lexer.Token(new_token_content, lexer.TokenType.identifier)
+        return lexer.Token(new_token_content, lexer.TokenType.identifier, token.line(), token.column())
+
+    def get_initial_comment(self, file_path):
+        return "// {}\n".format(os.path.basename(file_path))
+
+    def get_declaration_comment(self, type_class, type_name):
+        return '/// Text for {} {}\n'.format(type_class, type_name)
+
+    def get_type_description_comment(self, type_class, type_name):
+        return '/// Text for {} {}\n'.format(type_class, type_name)
+
+    def get_function_description_comment(self, func_name):
+        return '/// Text for function {}\n'.format(type, func_name)
+
 
     def format_identifier(self, token, id_type=IdType.Variable):
         if id_type == IdType.Type or id_type == IdType.Enum:
@@ -135,6 +148,17 @@ class CodeConvectionFormatter:
         else:
             return False
 
+    def check_if_declaration(self, tokens, i):
+        i -= 1
+        res = False
+        while i > 0 and tokens[i].type() == lexer.TokenType.whitespace:
+            i -= 1
+        if tokens[i].type() != lexer.TokenType.whitespace:
+            if tokens[i].is_type() or tokens[i].type() == lexer.TokenType.identifier:
+                res = True
+        return res
+
+
     def check_if_called(self, tokens, i):
         return tokens[i - 1].content() == '.'
 
@@ -161,16 +185,20 @@ class CodeConvectionFormatter:
         next_is_tempalte = False
         template_count = 0
         template_typenames = list()
+        next_is_function_declaration = False
+
         while i < len(tokens) and tokens[i].content() != '}':
             content = tokens[i].content()
             if tokens[i].type() == lexer.TokenType.identifier:
                 is_function = self.check_if_function(tokens, i)
                 is_called = self.check_if_called(tokens, i)
+                is_declaration = self.check_if_declaration(tokens, i)
                 is_class = content in local_variable_dictionary['class']['names']
                 is_struct = content in local_variable_dictionary['struct']['names']
                 is_enum = content in local_variable_dictionary['enum']['names']
                 is_macro = content in local_variable_dictionary['macro']['names']
                 is_namespace = content in local_variable_dictionary['namespace']['names']
+
                 token_type = None
 
                 if next_is_class_instance and not is_function:
@@ -201,6 +229,8 @@ class CodeConvectionFormatter:
                     if content == 'main':
                         token_type = IdType.Main
                     else:
+                        if is_declaration:
+                            next_is_function_declaration = True
                         token_type = IdType.Function
                 else:
                     if next_is_const:
@@ -326,46 +356,102 @@ class CodeConvectionFormatter:
             i += 1
         return i, formatted_tokens, local_variable_dictionary, class_members
 
+    def add_documentation(self, tokens, file_path):
+        i = 0
+
+        while len(tokens) > 0 and tokens[0].type() == lexer.TokenType.whitespace:
+            tokens = tokens[1:]
+
+        initial_comment = self.get_initial_comment(file_path)
+        if tokens[0].content() != initial_comment:
+            tokens.insert(0, lexer.Token(initial_comment, lexer.TokenType.comment, 0, 0))
+
+        comment_line = -1
+        next_is_declaration = False
+        type_class = None
+        is_template = False
+        name = str()
+        while i < len(tokens):
+            content = tokens[i].content()
+            if content == 'template':
+                comment_line = tokens[i].line()-1
+                is_template = True
+            elif content == 'class':
+                next_is_declaration = True
+                type_class = 'class'
+            elif content == 'struct':
+                next_is_declaration = True
+                type_class = 'struct'
+            elif content == 'enum':
+                next_is_declaration = True
+                type_class = 'enum'
+            elif tokens[i].type() == lexer.TokenType.identifier:
+                is_function = self.check_if_function(tokens, i)
+                is_declaration = self.check_if_declaration(tokens, i)
+                if is_function and is_declaration:
+                    if not is_template:
+                        comment_line = tokens[i].line()-1
+                    name = tokens[i].content()
+            elif next_is_declaration:
+                if not is_template:
+                    comment_line = tokens[i].line()-1
+                name = tokens[i].content()
+                next_is_declaration = False
+            elif content == '{':
+                if name != '':
+                    j = i
+                    while j > 0 and tokens[j].line() > comment_line:
+                        j -= 1
+                    declaration_comment = self.get_declaration_comment(type_class, name)
+                    tokens.insert(j + 1, lexer.Token(declaration_comment, lexer.TokenType.comment, comment_line, 0))
+                    i += 1
+
+            i += 1
+
     def format_file(self, file_path, format_file=False, project_formatting=False, in_file_call=False):
         with open(file_path, 'r') as file_reader:
             file = file_reader.read()
-        tokens = lexer.lex(file)
-        current_scope = {'type': 'file', 'name': file_path}
-        empty_config = {'names': [], 'variables': []}
-        variable_dictionary = {'class': copy.deepcopy(empty_config),
-                               'struct': copy.deepcopy(empty_config),
-                               'enum': copy.deepcopy(empty_config),
-                               'macro': copy.deepcopy(empty_config),
-                               'namespace': copy.deepcopy(empty_config),
-                               'file_name': file_path}
-        class_members = dict()
-        i, formatted_tokens, variable_dictionary, class_members = self.format_scope(tokens, 0, current_scope, variable_dictionary, class_members)
-        if not in_file_call:
-            error_id = 1
-            with open(file_path+'_verification.log', 'w') as log_writer:
-                if file_path != self.normalize_name(file_path):
-                    log_writer.write('{id}. {path}: wrong file extension\n'.format(id=error_id, path=file_path))
-                    error_id += 1
-                for i in range(len(tokens)):
-                    if tokens[i].content() != formatted_tokens[i].content():
-                        error_message = '{id}. {path}: line {line} - {content}: {error_message}\n'.format(
-                            id=error_id, path=file_path, line = tokens[i].line(), content=tokens[i].content(),
-                            error_message=tokens[i].get_error_message()
-                        )
-                        log_writer.write(error_message)
+        try:
+            tokens = lexer.lex(file)
+            current_scope = {'type': 'file', 'name': file_path}
+            empty_config = {'names': [], 'variables': []}
+            variable_dictionary = {'class': copy.deepcopy(empty_config),
+                                   'struct': copy.deepcopy(empty_config),
+                                   'enum': copy.deepcopy(empty_config),
+                                   'macro': copy.deepcopy(empty_config),
+                                   'namespace': copy.deepcopy(empty_config),
+                                   'file_name': file_path}
+            class_members = dict()
+            i, formatted_tokens, variable_dictionary, class_members = self.format_scope(tokens, 0, current_scope, variable_dictionary, class_members)
+            # self.add_documentation(formatted_tokens, file_path)
+            if not in_file_call:
+                error_id = 1
+                with open(file_path+'_verification.log', 'w') as log_writer:
+                    if file_path != self.normalize_name(file_path):
+                        log_writer.write('{id}. {path}: wrong file extension\n'.format(id=error_id, path=file_path))
                         error_id += 1
-        if format_file:
-            if project_formatting:
-                self.files[file_path] = str()
-                for token in formatted_tokens:
-                    self.files[file_path] += token.content()
-            else:
-                with open(file_path, 'w') as file_writer:
+                    for i in range(len(tokens)):
+                        if tokens[i].content() != formatted_tokens[i].content():
+                            error_message = '{id}. {path}: line {line} - {content}: {error_message}\n'.format(
+                                id=error_id, path=file_path, line = tokens[i].line(), content=tokens[i].content(),
+                                error_message=tokens[i].get_error_message()
+                            )
+                            log_writer.write(error_message)
+                            error_id += 1
+            if format_file:
+                if project_formatting:
+                    self.files[file_path] = str()
                     for token in formatted_tokens:
-                        file_writer.write(token.content())
-                os.rename(file_path, self.normalize_name(file_path))
+                        self.files[file_path] += token.content()
+                else:
+                    with open(file_path, 'w') as file_writer:
+                        for token in formatted_tokens:
+                            file_writer.write(token.content())
+                    os.rename(file_path, self.normalize_name(file_path))
 
-        return variable_dictionary, class_members
+            return variable_dictionary, class_members
+        except Exception as e:
+            print(e)
 
     @classmethod
     def is_cpp_file(cls, file_name):
