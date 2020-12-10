@@ -15,12 +15,13 @@ class TokenType(enum.Enum):
 
 
 class Token:
-    def __init__(self, token_string, token_type, line=None, symbol_pos=None):
+    def __init__(self, token_string, token_type, line=None, symbol_pos=None, generated=False):
         self.__token_string = token_string
         self.__token_type = token_type
         self.__line = line
         self.__symbol_pos = symbol_pos
         self.__error_message = str()
+        self.__generated = generated
 
     def type(self):
         return self.__token_type
@@ -61,6 +62,9 @@ class Token:
 
     def get_error_message(self):
         return self.__error_message
+
+    def is_generated(self):
+        return self.__generated
 
 separators = ['{', '}', '(', ')', ';', ',']
 operators = {'!': {'!', '!='}, '~': {'~'}, '+': {'+', '++', '+='}, '-': {'-', '--', '-=', '->', '->*'},

@@ -364,7 +364,7 @@ class CodeConvectionFormatter:
 
         initial_comment = self.get_initial_comment(file_path)
         if tokens[0].content() != initial_comment:
-            comment = lexer.Token(initial_comment, lexer.TokenType.comment, 0, 0)
+            comment = lexer.Token(initial_comment, lexer.TokenType.comment, 0, 0, True)
             comment.set_error_message('No file description')
             tokens.insert(0, comment)
 
@@ -428,18 +428,18 @@ class CodeConvectionFormatter:
                         j1 -= 1
                     if tokens[j1].type() != lexer.TokenType.comment or (tokens[j1].type() == lexer.TokenType.comment and len(tokens[j1].get_error_message()) != 0):
                         declaration_comment = self.get_declaration_comment(type_class, name)
-                        comment_token = lexer.Token(declaration_comment, lexer.TokenType.comment, comment_line, indent+1)
+                        comment_token = lexer.Token(declaration_comment, lexer.TokenType.comment, comment_line, indent+1, True)
                         comment_token.set_error_message('No description of {}'.format(name))
                         tokens.insert(j + 1, comment_token)
                         for k in range(indent-1):
-                            generated_token = lexer.Token(' ', lexer.TokenType.whitespace, comment_line, k)
+                            generated_token = lexer.Token(' ', lexer.TokenType.whitespace, comment_line, k, True)
                             tokens.insert(j + 1, generated_token)
                             i += 1
                         indent = 1
                         next_column = 1
                         for k in range(len(indent_stack)):
                             indent_content = indent_stack[k].content()
-                            new_token = lexer.Token(indent_content, lexer.TokenType.whitespace, comment_line, next_column)
+                            new_token = lexer.Token(indent_content, lexer.TokenType.whitespace, comment_line, next_column, True)
                             tokens.insert(j+1, new_token)
                             i += 1
                             next_column += len(indent_content)
@@ -472,8 +472,11 @@ class CodeConvectionFormatter:
                     if file_path != self.normalize_name(file_path):
                         log_writer.write('{id}. {path}: wrong file extension\n'.format(id=error_id, path=file_path))
                         error_id += 1
+                    shift = 0
                     for i in range(len(tokens)):
-                        if tokens[i].content() != formatted_tokens[i].content():
+                        while formatted_tokens[i+shift].is_generated():
+                            shift += 1
+                        if tokens[i].content() != formatted_tokens[i+shift].content():
                             error_message = '{id}. {path}: line {line} - {content}: {error_message}\n'.format(
                                 id=error_id, path=file_path, line = tokens[i].line(), content=tokens[i].content(),
                                 error_message=tokens[i].get_error_message()
