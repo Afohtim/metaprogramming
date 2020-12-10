@@ -151,8 +151,18 @@ class CodeConvectionFormatter:
     def check_if_declaration(self, tokens, i):
         i -= 1
         res = False
-        while i > 0 and tokens[i].type() == lexer.TokenType.whitespace:
-            i -= 1
+        namespace_member = False
+        while True:
+            if i > 0 and tokens[i].type() == lexer.TokenType.whitespace:
+                i -= 1
+            elif i > 0 and tokens[i].content() == '::':
+                namespace_member = True
+                i -= 1
+            elif namespace_member and i > 0 and tokens[i].type() == lexer.TokenType.identifier:
+                namespace_member = False
+                i -= 1
+            else:
+                break
         if tokens[i].type() != lexer.TokenType.whitespace:
             if tokens[i].is_type() or tokens[i].type() == lexer.TokenType.identifier:
                 res = True

@@ -118,9 +118,9 @@ def lex(code):
                     comment += code[i]
                     i += 1
                 comment += '\n'
+                token_list.append(Token(comment, TokenType.comment, line, i - line_start))
                 line += 1
                 line_start = i
-                token_list.append(Token(comment, TokenType.comment, line, i - line_start))
             elif code[i] == '/' and len(code) > i + 1 and code[i + 1] == '*':
                 comment = ''
                 while i + 1 < len(code) and not(code[i] == '*' and code[i+1] == '/'):
