@@ -88,13 +88,13 @@ class CodeConvectionFormatter:
         return "// {}\n".format(os.path.basename(file_path))
 
     def get_declaration_comment(self, type_class, type_name):
-        return '/// Text for {} {}\n'.format(type_class, type_name)
+        return '/// Description for {} {}\n'.format(type_class, type_name)
 
     def get_type_description_comment(self, type_class, type_name):
-        return '/// Text for {} {}\n'.format(type_class, type_name)
+        return '/// Description for {} {}\n'.format(type_class, type_name)
 
     def get_function_description_comment(self, func_name):
-        return '/// Text for function {}\n'.format(type, func_name)
+        return '/// Description for function {}\n'.format(type, func_name)
 
 
     def format_identifier(self, token, id_type=IdType.Variable):
@@ -364,47 +364,89 @@ class CodeConvectionFormatter:
 
         initial_comment = self.get_initial_comment(file_path)
         if tokens[0].content() != initial_comment:
-            tokens.insert(0, lexer.Token(initial_comment, lexer.TokenType.comment, 0, 0))
+            comment = lexer.Token(initial_comment, lexer.TokenType.comment, 0, 0)
+            comment.set_error_message('No file description')
+            tokens.insert(0, comment)
 
         comment_line = -1
         next_is_declaration = False
         type_class = None
         is_template = False
+        template_count = 0
         name = str()
+        indent = 0
+        indent_stack = []
         while i < len(tokens):
             content = tokens[i].content()
             if content == 'template':
                 comment_line = tokens[i].line()-1
                 is_template = True
+                template_count += 1
+            elif template_count > 0:
+                if content == '>':
+                    template_count -= 1
             elif content == 'class':
                 next_is_declaration = True
                 type_class = 'class'
+                indent = tokens[i].column()
             elif content == 'struct':
                 next_is_declaration = True
                 type_class = 'struct'
+                indent = tokens[i].column()
             elif content == 'enum':
                 next_is_declaration = True
                 type_class = 'enum'
+                indent = tokens[i].column()
             elif tokens[i].type() == lexer.TokenType.identifier:
                 is_function = self.check_if_function(tokens, i)
                 is_declaration = self.check_if_declaration(tokens, i)
-                if is_function and is_declaration:
+                if next_is_declaration:
                     if not is_template:
                         comment_line = tokens[i].line()-1
                     name = tokens[i].content()
-            elif next_is_declaration:
-                if not is_template:
-                    comment_line = tokens[i].line()-1
-                name = tokens[i].content()
-                next_is_declaration = False
-            elif content == '{':
+                    next_is_declaration = False
+                elif is_function and is_declaration:
+                    if not is_template:
+                        comment_line = tokens[i].line()-1
+                    type_class = 'function'
+                    name = content
+
+                    j = i
+                    while tokens[j].column() > 1:
+                        j -= 1
+                    while tokens[j].type() == lexer.TokenType.whitespace:
+                        indent_stack += [tokens[j]]
+                        j += 1
+
+            elif content in ['{', ';']:
                 if name != '':
                     j = i
                     while j > 0 and tokens[j].line() > comment_line:
                         j -= 1
-                    declaration_comment = self.get_declaration_comment(type_class, name)
-                    tokens.insert(j + 1, lexer.Token(declaration_comment, lexer.TokenType.comment, comment_line, 0))
-                    i += 1
+                    j1 = j
+                    while j1 > 0 and tokens[j1].type() == lexer.TokenType.whitespace:
+                        j1 -= 1
+                    if tokens[j1].type() != lexer.TokenType.comment or (tokens[j1].type() == lexer.TokenType.comment and len(tokens[j1].get_error_message()) != 0):
+                        declaration_comment = self.get_declaration_comment(type_class, name)
+                        comment_token = lexer.Token(declaration_comment, lexer.TokenType.comment, comment_line, indent+1)
+                        comment_token.set_error_message('No description of {}'.format(name))
+                        tokens.insert(j + 1, comment_token)
+                        for k in range(indent-1):
+                            generated_token = lexer.Token(' ', lexer.TokenType.whitespace, comment_line, k)
+                            tokens.insert(j + 1, generated_token)
+                            i += 1
+                        indent = 1
+                        next_column = 1
+                        for k in range(len(indent_stack)):
+                            indent_content = indent_stack[k].content()
+                            new_token = lexer.Token(indent_content, lexer.TokenType.whitespace, comment_line, next_column)
+                            tokens.insert(j+1, new_token)
+                            i += 1
+                            next_column += len(indent_content)
+                        indent_stack = []
+                        name = ''
+                        is_template = False
+                        i += 1
 
             i += 1
 
@@ -423,7 +465,7 @@ class CodeConvectionFormatter:
                                    'file_name': file_path}
             class_members = dict()
             i, formatted_tokens, variable_dictionary, class_members = self.format_scope(tokens, 0, current_scope, variable_dictionary, class_members)
-            # self.add_documentation(formatted_tokens, file_path)
+            self.add_documentation(formatted_tokens, file_path)
             if not in_file_call:
                 error_id = 1
                 with open(file_path+'_verification.log', 'w') as log_writer:
